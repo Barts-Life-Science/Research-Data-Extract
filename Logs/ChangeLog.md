@@ -7,8 +7,7 @@ All notable changes to this project will be documented in this file.
 
  
 ### Added
-Results
-Critical Care
+Results, Critical Care
  
 ### Changed
  
@@ -19,10 +18,10 @@ Hisopathology Reports
 ## [1.5] - 2022-09-15
  
 ### Added
- Powertrials
- Aliases
+ Powertrials, Aliases
 
 ### Changed
    
 ### Fixed
 
+NHS Number inconsistency.
