@@ -3538,8 +3538,7 @@ SELECT @path=Extract_Path  FROM   bh_datawarehouse.dbo.Extract_Files_Config WHER
 	delete from #ALLFILENAMES where ExtrFilename is null
     UPDATE #ALLFILENAMES SET ExtrPath = @path where ExtrPath is null
 
-	 UPDATE #ALLFILENAMES  SET Table_name=  b.tabname  from #ALLFILENAMES a join #TableName1 b on left(a.ExtrFilename,12)=left(b.FileName_Prefix,12)
-	 and  left(a.ExtrFilename,12)=left(b.FileName_Prefix,12)
+	 UPDATE #ALLFILENAMES  SET Table_name=  b.tabname  from #ALLFILENAMES a join #TableName1 b on left(a.ExtrFilename,LEN(b.FileName_Prefix))=b.FileName_Prefix
 
 SELECT * FROM #ALLFILENAMES
     --cursor loop
