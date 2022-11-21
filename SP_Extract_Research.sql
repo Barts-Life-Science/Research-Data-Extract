@@ -33,9 +33,9 @@ GO
 --			   BH_Research database. This table will recreated everytime this SP executes
 ------------------------------------------------------------------
 
-ALTER PROCEDURE [dbo].[Sp_Extract_Research_Dev] 
+ALTER PROCEDURE [dbo].[Sp_Extract_Research] 
 (
-@EXTRACT_ID INT, @DATE DATETIME
+@EXTRACT_ID INT, @DATE DATETIME, @Anonymous INT
 )
 AS
 BEGIN
@@ -87,10 +87,7 @@ Declare @Demographics      int,   --(1/0)    --1
 		@Aliases		   int,     --(1/0)   --22
 		@CritCare		   int,     --(1/0)    --23
 		@Measurements	   int,     --(1/0)    --24
-		@Anonymous		   int     --(1/0)
-
-
-SELECT @Anonymous=1
+		@Emergency		   int     --(1/0)    --25
 
 --select * from [BH_DATAWAREHOUSE].dbo.[LKP_RESEARCH_EXTRACT_DATA_ELEMENTS]
 --------------------------------------------------------------------------
@@ -137,6 +134,8 @@ SELECT @PowertrialsPart=1  FROM #Config WHERE (Element_Desc= 'Powertrials')
 SELECT @Aliases=1		   FROM #Config WHERE (Element_Desc= 'Aliases')
 SELECT @CritCare=1		   FROM #Config WHERE (Element_Desc = 'CritCare')
 SELECT @Measurements=1	   FROM #Config WHERE (Element_Desc = 'Measurements')
+SELECT @Emergency=1	   	   FROM #Config WHERE (Element_Desc = 'EmergencyDepartment')
+
 
 
 
@@ -2467,7 +2466,7 @@ Set @ErrorMessage='SCR Iamging Temptable created'
 -----------------------------------------------------------------------------------
 --SCR is not enabled in MOCK as we do not have the linked server to the do so
 ------------------------------------------------------------------------------------
-
+/*
 
 
 IF @SCR=1
@@ -2806,7 +2805,7 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 			VALUES (@Extract_id,'SCR Data', @StartDate, @EndDate,@time,@Row_Count) 
 	END
 
-
+	*/
 
 ---------------------------------------------------------------------------------------------------------
 	
@@ -3234,8 +3233,8 @@ IF @CritCare=1
 Select @Row_Count=@@ROWCOUNT
 
 
-Set @ErrorPosition=880
-Set @ErrorMessage='CritActivity details inserted into Temptable'
+Set @ErrorPosition=1180
+Set @ErrorMessage='Measurement details inserted into Temptable'
     
 SELECT	@EndDate = GETDATE();
 select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
@@ -3243,7 +3242,89 @@ select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(1
             + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
 
 INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
-			VALUES (@Extract_id,'CritActivity', @StartDate, @EndDate,@time,@Row_Count) 
+			VALUES (@Extract_id,'Measurement', @StartDate, @EndDate,@time,@Row_Count) 
+	END
+
+
+
+
+
+---------------------------------------------------------------------------------------------------------
+	
+
+	--Emergency Department
+---------------------------------------------------------------------------------------------------
+
+SET @ErrorPosition=1200
+SET @ErrorMessage='Emergency Department'
+
+IF OBJECT_ID(N'RDE_EmergencyD', N'U') IS NOT NULL DROP TABLE RDE_EmergencyD
+
+	CREATE TABLE RDE_EmergencyD (
+		PERSONID							VARCHAR(14),
+		MRN									VARCHAR(20),
+		NHS_NUMBER							VARCHAR(20),
+		Arrival_Dt_Tm						VARCHAR(30),
+		Departure_Dt_Tm						VARCHAR(30),
+		Dischage_Status_CD					VARCHAR(30),
+		Discharge_Status_Desc				VARCHAR(1000),
+		Discharge_Dest_CD					VARCHAR(30),
+		Discharge_Dest_Desc					VARCHAR(1000),
+		Diag_Code							VARCHAR(30),
+		SNOMED_CD							VARCHAR(30),
+		SNOMED_Desc							VARCHAR(1000)
+	
+	 )
+
+SET @ErrorPosition=1250
+SET @ErrorMessage='Emergency temp table created'
+
+IF @Emergency=1
+   BEGIN
+
+  SELECT @StartDate =GETDATE()
+
+     INSERT INTO RDE_EmergencyD
+        SELECT 
+		CONVERT(VARCHAR(14), [DEM].[PERSON_ID])											AS PERSONID,
+		DEM.MRN																			AS MRN,	
+		DEM.NHS_NUMBER																	AS NHS_NUMBER,
+		CONVERT(VARCHAR(30), [AEA].[ARRIVAL_DT_TM])										AS Arrival_Dt_Tm,
+		CONVERT(VARCHAR(30), [AEA].[DEPARTURE_TM])										AS Departure_Dt_Tm,
+		CONVERT(VARCHAR(30), [AEA].[DISCHARGE_STATUS_CD])								AS Dischage_Status_CD,
+		CONVERT(VARCHAR(1000), dbo.csvString([D].[DISCHARGE_STATUS_DESC]))								AS Discharge_Status_Desc,
+		CONVERT(VARCHAR(30), [AEA].[Discharge_destination_Cd])									AS Discharge_Dest_CD,
+		CONVERT(VARCHAR(1000), dbo.csvString([E].[DISCHARGE_DESTINATION_DESC]))								AS Discharge_Dest_Desc,
+		CONVERT(VARCHAR(30), [DIA].[DIAG_CD])											AS Diag_Code,
+		CONVERT(VARCHAR(30), [REF].[Diagnosis_Snomed_Cd])											AS SNOMED_CD,
+		CONVERT(VARCHAR(1000), dbo.csvString([REF].[Diagnosis_Snomed_Desc]))										AS SNOMED_Desc
+
+		FROM [BH_DATAWAREHOUSE].[dbo].[CDS_AEA] AEA 
+		INNER JOIN RDE_Patient_Demographics DEM     ON DEM.MRN=AEA.mrn
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DISCHARGE_DESTINATION] e on AEA.Discharge_Destination_Cd = e.Discharge_Destination_Snomed_Cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_MAP_ATT_DISP_DISCH_STAT] d on AEA.Discharge_Status_Cd = d.Discharge_Status_ECD_Cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_SITE] ts on AEA.treatment_site_code = ts.site_cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_AEA_DIAG] DIA on AEA.cds_aea_id = DIA.cds_aea_id
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DIAGNOSIS] REF on DIA.Diag_ECD_Cd = ref.diagnosis_Snomed_cd
+		
+
+		
+
+
+
+Select @Row_Count=@@ROWCOUNT
+
+
+Set @ErrorPosition=1280
+Set @ErrorMessage='Emergency details inserted into Temptable'
+    
+SELECT	@EndDate = GETDATE();
+select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
+            + CAST( DATEPART(MINUTE, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  MINS '
+            + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
+
+INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
+			VALUES (@Extract_id,'Emergency', @StartDate, @EndDate,@time,@Row_Count) 
 	END
 
 
@@ -3402,6 +3483,11 @@ ALTER TABLE BH_RESEARCH.dbo.RDE_CritOPCS DROP COLUMN IF EXISTS MRN
 ALTER TABLE BH_RESEARCH.dbo.RDE_Measurements DROP COLUMN IF EXISTS NHSNumber
 ALTER TABLE BH_RESEARCH.dbo.RDE_Measurements DROP COLUMN IF EXISTS NHS_Number
 ALTER TABLE BH_RESEARCH.dbo.RDE_Measurements DROP COLUMN IF EXISTS MRN
+
+
+ALTER TABLE BH_RESEARCH.dbo.RDE_EmergencyD DROP COLUMN IF EXISTS NHSNumber
+ALTER TABLE BH_RESEARCH.dbo.RDE_EmergencyD DROP COLUMN IF EXISTS NHS_Number
+ALTER TABLE BH_RESEARCH.dbo.RDE_EmergencyD DROP COLUMN IF EXISTS MRN
 
 END
 
