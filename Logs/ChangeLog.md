@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 Results, Critical Care, Emergency Department, Meds Administered.
  
 ### Changed
+Maternity booking and delivery tables expanded.
  
 ### Fixed
 
