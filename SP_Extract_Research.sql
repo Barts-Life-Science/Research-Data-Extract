@@ -3307,10 +3307,10 @@ IF @CritCare=1
   FROM TempCE cce 
             LEFT JOIN RDE_Encounter ENC with (nolock)
                 ON ENC.ENCNTR_ID = cce.ENCNTR_ID
-  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] ref on cce.event_cd = ref.CODE_VALUE_CD
-  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] urf on cce.event_result_units_cd  = urf.CODE_VALUE_CD
-  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] nrf on cce.normalcy_cd  = nrf.CODE_VALUE_CD
-  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] srf on cce.contributor_system_cd  = srf.CODE_VALUE_CD
+  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] with (nolock) ref on cce.event_cd = ref.CODE_VALUE_CD
+  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] with (nolock) urf on cce.event_result_units_cd  = urf.CODE_VALUE_CD
+  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] with (nolock) nrf on cce.normalcy_cd  = nrf.CODE_VALUE_CD
+  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] with (nolock) srf on cce.contributor_system_cd  = srf.CODE_VALUE_CD
   LEFT OUTER JOIN TempCE pev   with (nolock)  ON cce.PARENT_EVENT_ID=pev.EVENT_ID
   LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo]. PI_LKP_CDE_CODE_VALUE_REF TESTnm with (nolock) ON pev.EVENT_CD = TESTnm.CODE_VALUE_CD	
     WHERE (cce.EVENT_RESULT_UNITS_CD > 0)
@@ -3390,11 +3390,11 @@ IF @Emergency=1
 
 		FROM [BH_DATAWAREHOUSE].[dbo].[CDS_AEA] AEA 
 		INNER JOIN RDE_Patient_Demographics DEM     ON DEM.MRN=AEA.mrn
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DISCHARGE_DESTINATION] e on AEA.Discharge_Destination_Cd = e.Discharge_Destination_Snomed_Cd
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_MAP_ATT_DISP_DISCH_STAT] d on AEA.Discharge_Status_Cd = d.Discharge_Status_ECD_Cd
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_SITE] ts on AEA.treatment_site_code = ts.site_cd
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_AEA_DIAG] DIA on AEA.cds_aea_id = DIA.cds_aea_id
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DIAGNOSIS] REF on DIA.Diag_ECD_Cd = ref.diagnosis_Snomed_cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DISCHARGE_DESTINATION] with (nolock) e on AEA.Discharge_Destination_Cd = e.Discharge_Destination_Snomed_Cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_MAP_ATT_DISP_DISCH_STAT] with (nolock) d on AEA.Discharge_Status_Cd = d.Discharge_Status_ECD_Cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_SITE] with (nolock) ts on AEA.treatment_site_code = ts.site_cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_AEA_DIAG] with (nolock) DIA on AEA.cds_aea_id = DIA.cds_aea_id
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DIAGNOSIS] with (nolock) REF on DIA.Diag_ECD_Cd = ref.diagnosis_Snomed_cd
 		
 
 		
@@ -3430,7 +3430,7 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 ---------------------------------------------------------------------------------------------------
 
 SET @ErrorPosition=1300
-SET @ErrorMessage='Medicines Administred'
+SET @ErrorMessage='Medicines Administered'
 
 IF OBJECT_ID(N'RDE_MedAdmin', N'U') IS NOT NULL DROP TABLE RDE_MedAdmin
 
