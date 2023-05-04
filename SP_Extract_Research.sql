@@ -1,6 +1,6 @@
 USE [BH_RESEARCH]
 GO
-/****** Object:  StoredProcedure [dbo].[Sp_Extract_Research_Dev]    Script Date: 17/02/2023 12:52:56 ******/
+/****** Object:  StoredProcedure [dbo].[Sp_Extract_Research]    Script Date: 17/02/2023 12:52:56 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -1631,7 +1631,7 @@ IF @PCProblems =1
 			,CONVERT(VARCHAR(20),[Problem_Code])							   AS ProbCode
 			,CONVERT(VARCHAR(100), [CONCEPT_CKI_IDENT])							AS CKI_Code
     
-  FROM [BH_DATAWAREHOUSE].[dbo].[PC_PROBLEMS] pcp
+  FROM [BH_DATAWAREHOUSE].[dbo].[PC_PROBLEMS] pcp WITH (NOLOCK)
         INNER JOIN RDE_Encounter E
           ON PCP.MRN=E.MRN AND PCP.Person_Id=E.PERSON_ID
 		  			 LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_NOMENCLATURE_REF] ref 
@@ -2095,21 +2095,21 @@ SELECT @StartDate =GETDATE()
          
   FROM TempOrder O
  
-        INNER JOIN RDE_Encounter ENC 
+        INNER JOIN RDE_Encounter ENC WITH (NOLOCK)
 		   ON O.ENCNTR_ID=ENC.ENCNTR_ID
-		   INNER JOIN BH_DATAWAREHOUSE.DBO.MILL_DIR_ORDER_TAILS T
+		   INNER JOIN BH_DATAWAREHOUSE.DBO.MILL_DIR_ORDER_TAILS T WITH (NOLOCK)
 		   ON T.ORDER_ID=O.ORDER_ID AND T.ORIGINATING_ENCNTR_ID=O.ENCNTR_ID
- 	    LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Activity
+ 	    LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Activity WITH (NOLOCK)
 		   ON O.ACTIVITY_TYPE_CD = Activity.CODE_VALUE_CD
-		LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Cancel
+		LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Cancel WITH (NOLOCK)
 		   ON O.CANCELED_REASON_CD = Cancel.CODE_VALUE_CD
-	    LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF]  ClinicCat
+	    LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF]  ClinicCat WITH (NOLOCK)
 		   ON O.CLINICAL_CATEGORY_CD= ClinicCat.CODE_VALUE_CD
-		LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF]  OrderTyp
+		LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF]  OrderTyp WITH (NOLOCK)
 		   ON O.ORDERABLE_TYPE_CD = OrderTyp.CODE_VALUE_CD
-		LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] LastOStat
+		LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] LastOStat WITH (NOLOCK)
 		   ON O.LAST_ORDER_STATUS_CD = LastOStat.CODE_VALUE_CD
-		LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Prio
+		LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Prio WITH (NOLOCK)
 		   ON O.PRIORITY_CD = Prio.CODE_VALUE_CD                                                      --10577 medications only
   WHERE ORDERABLE_TYPE_CD=2516 AND o.LAST_ORDER_STATUS_CD in  ('2543','2545','2547','2548','2550','2552','643466')
 AND CLINICAL_CATEGORY_CD=10577 and o.ACTIVITY_TYPE_CD='705'--2516 pharmacy, 2550 order status as ordered
@@ -2557,7 +2557,7 @@ Set @ErrorMessage='SCR Iamging Temptable created'
 -----------------------------------------------------------------------------------
 --SCR is not enabled in MOCK as we do not have the linked server to the do so
 ------------------------------------------------------------------------------------
-/*
+
 
 
 IF @SCR=1
@@ -2574,7 +2574,7 @@ IF OBJECT_ID(N'RDE_SCR_Demogrphics', N'U') IS NOT NULL DROP TABLE RDE_SCR_Demogr
       ,dbo.csvString([REASON_RISK]) AS REASON_RISK
 	  
      INTO RDE_SCR_Demogrphics
-  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblDEMOGRAPHICS] SCR
+  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblDEMOGRAPHICS] SCR WITH (NOLOCK)
   INNER JOIN RDE_Patient_Demographics PAT  
   ON --SCR.[N1_2_HOSPITAL_NUMBER]=PAT.MRN
   SCR.N1_1_NHS_NUMBER=PAT.NHS_Number
@@ -2636,7 +2636,7 @@ INSERT INTO RDE_SCR_Referrals
       ,CONVERT(VARCHAR(20),[SubsiteID])                                                AS SubSiteID
      
       
-    FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_REFERRALS] REF
+    FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_REFERRALS] REF WITH (NOLOCK)
         INNER join  RDE_SCR_Demogrphics d
 				ON REF.Patient_id=d.patientid
 		LEFT OUTER JOIN [SCR_NEW].[CancerRegisterMerged].[dbo].[ltblPRIORITY_TYPE] PT         --Priority type
@@ -2705,7 +2705,7 @@ Set @ErrorMessage='SCR Tracking Comments data inserted into Temptable'
       ,dbo.csvString([L_NETWORK_FEEDBACK])										AS NetworkFeedback
       ,dbo.csvString([L_NETWORK_COMMENTS])										AS NetworkComments
      
-     FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_CARE_PLAN] CP
+     FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_CARE_PLAN] CP WITH (NOLOCK)
   INNER JOIN RDE_SCR_Referrals R
   ON CP.CARE_ID=R.CAREID 
 
@@ -2741,7 +2741,7 @@ Set @ErrorMessage='SCR care plan data inserted into Temptable'
 	  ,dbo.csvString([ROOT_DTT_DATE_COMMENTS])							AS [ROOT_DATE_COMMENTS]
     
     
-  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblDEFINITIVE_TREATMENT] DT
+  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblDEFINITIVE_TREATMENT] DT WITH (NOLOCK)
    INNER JOIN RDE_SCR_Referrals R
   ON DT.CARE_ID=R.CAREID 
 
@@ -2781,7 +2781,7 @@ SELECT [CARE_ID]															AS CareID
       ,dbo.csvString([Pathway End Reason (Faster Diagnosis)])								AS PathwayEndReason
       ,dbo.csvString([Primary Cancer Site])												AS PrimCancerSite
 
-  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[BIvwDiagnosis]diag
+  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[BIvwDiagnosis] diag WITH (NOLOCK)
   join RDE_SCR_Demogrphics D
   on Diag.[NHS Number]=d.NHS_Number
 
@@ -2814,7 +2814,7 @@ SELECT [CARE_ID]												AS CareID
       ,dbo.csvString([Imaging Report Text])									AS ImagingReport
       ,dbo.csvString([Staging Laparoscopy Performed])							AS StagingLaproscopyPerformed
     
-  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[BIvwInvestigations]inv
+  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[BIvwInvestigations] inv
   join RDE_SCR_Demogrphics D
   on inv.[NHS Number]=d.NHS_Number
 
@@ -2847,7 +2847,7 @@ SELECT [PATHOLOGY_ID]								AS PathologyID
       ,[SNOMedCT]									AS SNomedCT
       ,[SNOMEDDiagnosisID]							AS SNomedID
 	  	
-  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_PATHOLOGY] P
+  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_PATHOLOGY] P WITH (NOLOCK)
   join RDE_SCR_Referrals R
   on P.CARE_ID=R.CareID
   
@@ -2877,7 +2877,7 @@ INSERT INTO RDE_SCR_Imaging
       ,[UGI_STAGING_PROCEDURE]						AS StagingProc
       ,[L_IMAGING_CODE]								AS ImageCD
       
-  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_IMAGING]I
+  FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_IMAGING] I WITH (NOLOCK)
   join RDE_SCR_Referrals R
   on I.CARE_ID=R.CareID
 
@@ -2896,7 +2896,6 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 			VALUES (@Extract_id,'SCR Data', @StartDate, @EndDate,@time,@Row_Count) 
 	END
 
-	*/
 
 ---------------------------------------------------------------------------------------------------------
 	
@@ -3304,14 +3303,14 @@ IF @CritCare=1
 			CONVERT(VARCHAR(100), cce.EVENT_TAG_TXT)									AS EventText, 
 			CONVERT(VARCHAR(100), ref.code_desc_txt)									AS EventType, 
 			CONVERT(VARCHAR(100), TESTnm.code_desc_txt) 								AS EventParent
-  FROM TempCE cce 
+  FROM TempCE cce WITH (NOLOCK)
             LEFT JOIN RDE_Encounter ENC with (nolock)
                 ON ENC.ENCNTR_ID = cce.ENCNTR_ID
-  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] with (nolock) ref on cce.event_cd = ref.CODE_VALUE_CD
-  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] with (nolock) urf on cce.event_result_units_cd  = urf.CODE_VALUE_CD
-  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] with (nolock) nrf on cce.normalcy_cd  = nrf.CODE_VALUE_CD
-  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] with (nolock) srf on cce.contributor_system_cd  = srf.CODE_VALUE_CD
-  LEFT OUTER JOIN TempCE pev   with (nolock)  ON cce.PARENT_EVENT_ID=pev.EVENT_ID
+  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] ref WITH (NOLOCK) on cce.event_cd = ref.CODE_VALUE_CD
+  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] urf WITH (NOLOCK) on cce.event_result_units_cd  = urf.CODE_VALUE_CD
+  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] nrf WITH (NOLOCK) on cce.normalcy_cd  = nrf.CODE_VALUE_CD
+  LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] srf WITH (NOLOCK) on cce.contributor_system_cd  = srf.CODE_VALUE_CD
+  LEFT OUTER JOIN TempCE pev with (nolock) ON cce.PARENT_EVENT_ID=pev.EVENT_ID
   LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo]. PI_LKP_CDE_CODE_VALUE_REF TESTnm with (nolock) ON pev.EVENT_CD = TESTnm.CODE_VALUE_CD	
     WHERE (cce.EVENT_RESULT_UNITS_CD > 0)
 	AND 
@@ -3390,11 +3389,11 @@ IF @Emergency=1
 
 		FROM [BH_DATAWAREHOUSE].[dbo].[CDS_AEA] AEA 
 		INNER JOIN RDE_Patient_Demographics DEM     ON DEM.MRN=AEA.mrn
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DISCHARGE_DESTINATION] with (nolock) e on AEA.Discharge_Destination_Cd = e.Discharge_Destination_Snomed_Cd
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_MAP_ATT_DISP_DISCH_STAT] with (nolock) d on AEA.Discharge_Status_Cd = d.Discharge_Status_ECD_Cd
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_SITE] with (nolock) ts on AEA.treatment_site_code = ts.site_cd
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_AEA_DIAG] with (nolock) DIA on AEA.cds_aea_id = DIA.cds_aea_id
-		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DIAGNOSIS] with (nolock) REF on DIA.Diag_ECD_Cd = ref.diagnosis_Snomed_cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DISCHARGE_DESTINATION] e with (nolock) on AEA.Discharge_Destination_Cd = e.Discharge_Destination_Snomed_Cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_MAP_ATT_DISP_DISCH_STAT] d with (nolock) on AEA.Discharge_Status_Cd = d.Discharge_Status_ECD_Cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_SITE] ts with (nolock) on AEA.treatment_site_code = ts.site_cd
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_AEA_DIAG] DIA with (nolock) on AEA.cds_aea_id = DIA.cds_aea_id
+		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DIAGNOSIS] REF with (nolock) on DIA.Diag_ECD_Cd = ref.diagnosis_Snomed_cd
 		
 
 		
