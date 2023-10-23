@@ -1,13 +1,10 @@
 USE [BH_RESEARCH]
 GO
-
-/****** Object:  StoredProcedure [dbo].[Sp_Extract_Research]    Script Date: 17/02/2023 12:52:56 ******/
-
+/****** Object:  StoredProcedure [dbo].[Sp_Extract_Research_Dev]    Script Date: 23/10/2023 09:32:33 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-
 
 
 
@@ -85,12 +82,12 @@ Declare @Demographics      int,   --(1/0)    --1
         @SCR               int,   --(1/0)    --18
         @Allergy           int,   --(1/0)    --19
         @PharmacyOrders    int,    --(1/0)   --20
-		@PowertrialsPart   int,     --(1/0)   --21
+		@PowertrialsPart   int,     --(1/0)  --21
 
-		@Aliases		   int,     --(1/0)   --22
-		@CritCare		   int,     --(1/0)    --23
-		@Measurements	   int,     --(1/0)    --24
-		@Emergency		   int     --(1/0)    --25
+		@Aliases		   int,     --(1/0)  --22
+		@CritCare		   int,     --(1/0)  --23
+		@Measurements	   int,     --(1/0)  --24
+		@Emergency		   int     --(1/0)   --25
 
 
 --select * from [BH_DATAWAREHOUSE].dbo.[LKP_RESEARCH_EXTRACT_DATA_ELEMENTS]
@@ -166,7 +163,7 @@ Begin Try
 
 Set @ErrorPosition = 10	
 SET @ErrorMessage='Patient Demographics'
-IF OBJECT_ID(N'RDE_Patient_Demographics', N'U') IS NOT NULL DROP TABLE RDE_Patient_Demographics
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_Patient_Demographics', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_Patient_Demographics
 
 Set @ErrorPosition = 20	
 SET @ErrorMessage='Patient Demographics temptable created'
@@ -186,7 +183,15 @@ IF @Demographics=1
         ,Pat.DECEASED_DT_TM											AS [Date_of_Death]
         ,Pat.[PERSON_ID]
         ,Pat.LOCAL_PATIENT_IDENT									AS [MRN]
-     INTO RDE_Patient_Demographics
+		,(SELECT TOP(1) POSTCODE_TXT FROM [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_ADDRESS] A WHERE A.PERSON_ID = Pat.PERSON_ID ORDER BY END_EFFECTIVE_DT_TM  DESC) AS [Postcode]
+		,(SELECT TOP(1) CITY_TXT FROM [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_ADDRESS] A WHERE A.PERSON_ID = Pat.PERSON_ID ORDER BY END_EFFECTIVE_DT_TM  DESC) AS [City]
+		,MARITAL_STATUS_CD											AS [MARITAL_STATUS_CD]
+		,Mart.CODE_DESC_TXT											AS [MARITAL_STATUS]
+		,LANGUAGE_CD												AS [LANGUAGE_CD]
+		,lang.CODE_DESC_TXT											AS [LANGUAGE]
+		,RELIGION_CD												AS [RELIGION_CD]
+		,Reli.CODE_DESC_TXT											AS [RELIGION]
+     INTO  BH_RESEARCH.DBO.RDE_Patient_Demographics
 
     FROM  [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT] Pat with (nolock)
           INNER JOIN [BH_RESEARCH].[dbo].[RESEARCH_PATIENTS] Res
@@ -196,6 +201,12 @@ IF @Demographics=1
                ON Pat.ETHNIC_GROUP_CD=Eth.CODE_VALUE_CD
           LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] Gend with (nolock)
                ON Pat.GENDER_CD=Gend.CODE_VALUE_CD
+          LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] Mart with (nolock)
+               ON Pat.MARITAL_STATUS_CD=Mart.CODE_VALUE_CD
+		  LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] lang with (nolock)
+               ON Pat.LANGUAGE_CD=lang.CODE_VALUE_CD
+		  LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] Reli with (nolock)
+               ON Pat.RELIGION_CD=Reli.CODE_VALUE_CD
     WHERE RES.EXTRACT_ID=@EXTRACT_ID
 
 
@@ -212,12 +223,12 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 
 
 UPDATE Demo SET NHS_Number = 
-(SELECT TOP(1) ALIAS_TXT FROM BH_DATAWAREHOUSE.DBO.PI_CDE_PERSON_PATIENT_ALIAS A 
-WHERE PERSON_ALIAS_TYPE_CD = 18 AND A.PERSON_ID = Demo.PERSON_ID ORDER BY END_EFFECTIVE_DT_TM  DESC) FROM BH_RESEARCH.DBO.RDE_Patient_Demographics Demo WHERE NHS_Number IS NULL
+(SELECT TOP(1) ALIAS FROM BH_DATAWAREHOUSE.DBO.MILL_DIR_PERSON_ALIAS A 
+WHERE PERSON_ALIAS_TYPE_CD = 18 AND ACTIVE_IND = 1 AND A.PERSON_ID = Demo.PERSON_ID ORDER BY END_EFFECTIVE_DT_TM  DESC) FROM BH_RESEARCH.DBO.RDE_Patient_Demographics Demo WHERE NHS_Number IS NULL
 
 UPDATE Demo SET MRN = 
-(SELECT TOP(1) ALIAS_TXT FROM BH_DATAWAREHOUSE.DBO.PI_CDE_PERSON_PATIENT_ALIAS A 
-WHERE PERSON_ALIAS_TYPE_CD = 10 AND A.PERSON_ID = Demo.PERSON_ID ORDER BY END_EFFECTIVE_DT_TM  DESC) FROM BH_RESEARCH.DBO.RDE_Patient_Demographics Demo WHERE MRN IS NULL 
+(SELECT TOP(1) ALIAS FROM BH_DATAWAREHOUSE.DBO.MILL_DIR_PERSON_ALIAS A 
+WHERE PERSON_ALIAS_TYPE_CD = 10 AND ACTIVE_IND = 1 AND A.PERSON_ID = Demo.PERSON_ID ORDER BY END_EFFECTIVE_DT_TM  DESC) FROM BH_RESEARCH.DBO.RDE_Patient_Demographics Demo WHERE MRN IS NULL 
 
 --SELECT TOP 2* FROM [BH_DATAWAREHOUSE].[dbo].[PI_CDE_ENCOUNTER]
 Set @ErrorPosition = 30	
@@ -229,16 +240,16 @@ SET @ErrorMessage='Encounter details'
 
  SELECT	@StartDate = GETDATE();
 
-IF OBJECT_ID(N'RDE_Encounter', N'U') IS NOT NULL DROP TABLE RDE_Encounter
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_Encounter', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_Encounter
 
  SELECT E.PERSON_ID,E.ENCNTR_ID,D.NHS_Number,dbo.csvString(E.REASON_FOR_VISIT_TXT) AS REASON_FOR_VISIT_TXT, D.MRN
           ,E.[ENC_TYPE_CD],etype.CODE_DESC_TXT as ENC_TYPE
           ,E.ENC_STATUS_CD,estat.CODE_DESC_TXT as ENC_STATUS,E.FIN_NBR_ID
           ,E.ADMIN_CATEGORY_CD ,dbo.csvString(ADM.CODE_DESC_TXT) AS ADMIN_DESC
           ,E.TREATMENT_FUNCTION_CD,dbo.csvString(TFC.CODE_DESC_TXT) AS TFC_DESC ,E.VISIT_ID ,CREATE_DT_TM
-   INTO RDE_Encounter
+   INTO  BH_RESEARCH.DBO.RDE_Encounter
      FROM  [BH_DATAWAREHOUSE].[dbo].[PI_CDE_ENCOUNTER]  E with (nolock)
-        INNER JOIN  RDE_Patient_Demographics D 
+        INNER JOIN   BH_RESEARCH.DBO.RDE_Patient_Demographics D 
            ON  E.PERSON_ID=D.PERSON_ID
         LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] ADM with (nolock)
 		   ON E.ADMIN_CATEGORY_CD=ADM.CODE_VALUE_CD
@@ -252,8 +263,8 @@ IF OBJECT_ID(N'RDE_Encounter', N'U') IS NOT NULL DROP TABLE RDE_Encounter
 		  
 
 SELECT @Row_Count=@@ROWCOUNT
---select * from RDE_Encounter
-CREATE INDEX INDX_DET_ENC1 ON RDE_Encounter (ENCNTR_ID)
+--select * from  BH_RESEARCH.DBO.RDE_Encounter
+CREATE INDEX INDX_DET_ENC1 ON  BH_RESEARCH.DBO.RDE_Encounter (ENCNTR_ID)
 
 SET @ErrorPosition = 50	
 SET @ErrorMessage='Patient encounter details added to temptable'
@@ -271,18 +282,24 @@ END
 --orders table and clinical events
 -------------------------------------------------------------------------------------------
 
-IF OBJECT_ID(N'TempOrder', N'U') IS NOT NULL DROP TABLE TempOrder
-IF OBJECT_ID(N'TempCE', N'U') IS NOT NULL DROP TABLE TempCE
-IF OBJECT_ID(N'TempBlob', N'U') IS NOT NULL DROP TABLE TempBlob
+IF OBJECT_ID(N'BH_RESEARCH.DBO.TempOrder', N'U') IS NOT NULL DROP TABLE BH_RESEARCH.DBO.TempOrder
+IF OBJECT_ID(N'BH_RESEARCH.DBO.TempCE', N'U') IS NOT NULL DROP TABLE BH_RESEARCH.DBO.TempCE
+IF OBJECT_ID(N'BH_RESEARCH.DBO.TempBlob', N'U') IS NOT NULL DROP TABLE BH_RESEARCH.DBO.TempBlob
+
+IF OBJECT_ID(N'BH_RESEARCH.DBO.TempAlias', N'U') IS NOT NULL DROP TABLE BH_RESEARCH.DBO.TempAlias
+
+IF OBJECT_ID(N'BH_RESEARCH.DBO.TempAPC', N'U') IS NOT NULL DROP TABLE BH_RESEARCH.DBO.TempAPC
+IF OBJECT_ID(N'BH_RESEARCH.DBO.TempOPA', N'U') IS NOT NULL DROP TABLE BH_RESEARCH.DBO.TempOPA
+
 --TEMPORDER
 SELECT	@StartDate = GETDATE();
-SELECT ORD.* INTO TempOrder 
+SELECT ORD.* INTO BH_RESEARCH.DBO.TempOrder 
 FROM [BH_DATAWAREHOUSE].DBO.PI_CDE_Order ORD with(nolock)
-INNER JOIN  RDE_Encounter ENC with(nolock) ON ENC.encntr_id=ORD.encntr_id
+INNER JOIN   BH_RESEARCH.DBO.RDE_Encounter ENC with(nolock) ON ENC.encntr_id=ORD.encntr_id
 
 SELECT @Row_Count=@@ROWCOUNT
-CREATE clustered INDEX indx_Order_ID ON TempOrder (ORDER_ID)
-CREATE  INDEX indx_Order_ENCTRID ON TempOrder (ENCNTR_ID)
+CREATE clustered INDEX indx_Order_ID ON BH_RESEARCH.DBO.TempOrder (ORDER_ID)
+CREATE  INDEX indx_Order_ENCTRID ON BH_RESEARCH.DBO.TempOrder (ENCNTR_ID)
 
 SELECT	@EndDate = GETDATE();
 SELECT @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
@@ -295,13 +312,13 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 
 --TEMP CLINICAL EVENT
 SELECT	@StartDate = GETDATE();
-SELECT CE.* INTO TempCE 
+SELECT CE.* INTO BH_RESEARCH.DBO.TempCE 
 FROM [BH_DATAWAREHOUSE].DBO.PI_CDE_CLINICAL_EVENT CE with(nolock)
-INNER JOIN   RDE_Encounter ENC with(nolock) ON ENC.encntr_id=CE.encntr_id
+INNER JOIN    BH_RESEARCH.DBO.RDE_Encounter ENC with(nolock) ON ENC.encntr_id=CE.encntr_id
 SELECT @Row_Count=@@ROWCOUNT
 
-CREATE clustered INDEX indx_Event_ID ON TempCE (EVENT_ID)
-CREATE  INDEX indx_CE_ENCTRID ON TempCE (ENCNTR_ID)
+CREATE clustered INDEX indx_Event_ID ON BH_RESEARCH.DBO.TempCE (EVENT_ID)
+CREATE  INDEX indx_CE_ENCTRID ON BH_RESEARCH.DBO.TempCE (ENCNTR_ID)
 
 
 
@@ -316,11 +333,11 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 
 --TEMP BLOB DATASET
 SELECT	@StartDate = GETDATE();
-SELECT B.* INTO TempBLOB 
+SELECT B.* INTO BH_RESEARCH.DBO.TempBLOB 
 FROM [BH_DATAWAREHOUSE].DBO.PI_DIR_BLOB_CONTENT B with(nolock)
-INNER JOIN   TempCE CE with(nolock) ON CE.EVENT_ID=B.EVENT_ID
+INNER JOIN   BH_RESEARCH.DBO.TempCE CE with(nolock) ON CE.EVENT_ID=B.EVENT_ID
 SELECT @Row_Count=@@ROWCOUNT
-CREATE  INDEX indx_BEvent_ID ON TempBLOB (EVENT_ID)
+CREATE  INDEX indx_BEvent_ID ON BH_RESEARCH.DBO.TempBLOB (EVENT_ID)
 
 
 SELECT	@EndDate = GETDATE();
@@ -330,6 +347,88 @@ select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(1
 
 INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
 			VALUES (@Extract_id,'TempBlob', @StartDate, @EndDate,@time,@Row_Count)
+
+
+
+--TEMP ALIAS
+SELECT	@StartDate = GETDATE();
+SELECT A.* INTO BH_RESEARCH.DBO.TempAlias
+FROM BH_DATAWAREHOUSE.DBO.MILL_DIR_PERSON_ALIAS A with(nolock)
+WHERE ACTIVE_IND = 1
+AND PERSON_ID IN (SELECT PERSON_ID FROM BH_RESEARCH.DBO.RDE_Patient_Demographics)
+SELECT @Row_Count=@@ROWCOUNT
+CREATE NONCLUSTERED INDEX [ix_Research_PersAlias_Alias] ON BH_RESEARCH.DBO.TempAlias
+(
+    [ALIAS] ASC
+)
+INCLUDE (PERSON_ALIAS_TYPE_CD, PERSON_ID);
+
+CREATE NONCLUSTERED INDEX tempalias_type_cd_ix
+ON BH_RESEARCH.[dbo].[TempAlias] ([PERSON_ALIAS_TYPE_CD])
+INCLUDE ([PERSON_ID],[ALIAS])
+
+
+SELECT	@EndDate = GETDATE();
+select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
+            + CAST( DATEPART(MINUTE, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  MINS '
+            + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
+
+INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
+			VALUES (@Extract_id,'TempAlias', @StartDate, @EndDate,@time,@Row_Count)
+
+
+--TEMP APC
+SELECT	@StartDate = GETDATE();
+SELECT A.CDS_APC_ID, LALIAS.PERSON_ID, A.Start_dt, A.CDS_Activity_Dt INTO BH_RESEARCH.DBO.TempAPC
+FROM BH_RESEARCH.DBO.TempAlias LALIAS
+RIGHT JOIN  [BH_DATAWAREHOUSE].[dbo].[CDS_APC] A with(nolock)
+ON (LALIAS.ALIAS = A.NHS_NUMBER AND LALIAS.PERSON_ALIAS_TYPE_CD = 18) OR (LALIAS.ALIAS = A.mrn AND LALIAS.PERSON_ALIAS_TYPE_CD = 10)
+WHERE LALIAS.PERSON_ID IS NOT NULL
+
+SELECT @Row_Count=@@ROWCOUNT
+
+
+CREATE NONCLUSTERED INDEX tempapc_id_ix
+ON BH_RESEARCH.[dbo].[TempAPC] ([CDS_APC_ID])
+INCLUDE ([PERSON_ID],[Start_dt], [CDS_Activity_Dt])
+
+
+SELECT	@EndDate = GETDATE();
+select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
+            + CAST( DATEPART(MINUTE, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  MINS '
+            + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
+
+INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
+			VALUES (@Extract_id,'TempAPC', @StartDate, @EndDate,@time,@Row_Count)
+
+
+			
+--TEMP OPA
+SELECT	@StartDate = GETDATE();
+SELECT A.CDS_OPA_ID, LALIAS.PERSON_ID, A.Att_Dt, A.CDS_Activity_Dt INTO BH_RESEARCH.DBO.TempOPA
+FROM BH_RESEARCH.DBO.TempAlias LALIAS
+RIGHT JOIN  [BH_DATAWAREHOUSE].[dbo].[CDS_OP_ALL] A with(nolock)
+ON (LALIAS.ALIAS = A.NHS_NUMBER AND LALIAS.PERSON_ALIAS_TYPE_CD = 18) OR (LALIAS.ALIAS = A.mrn AND LALIAS.PERSON_ALIAS_TYPE_CD = 10)
+WHERE LALIAS.PERSON_ID IS NOT NULL
+
+SELECT @Row_Count=@@ROWCOUNT
+
+
+
+CREATE NONCLUSTERED INDEX tempopa_id_ix
+ON BH_RESEARCH.[dbo].[TempOPA] ([CDS_OPA_ID])
+INCLUDE ([PERSON_ID],[Att_dt], [CDS_Activity_Dt])
+
+
+SELECT	@EndDate = GETDATE();
+select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
+            + CAST( DATEPART(MINUTE, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  MINS '
+            + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
+
+INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
+			VALUES (@Extract_id,'TempOPA', @StartDate, @EndDate,@time,@Row_Count)
+
+
 
 
 
@@ -343,9 +442,10 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=60
 SET @ErrorMessage='Inaptient Diagnosis'
 
-IF OBJECT_ID(N'RDE_APC_DIAGNOSIS', N'U') IS NOT NULL DROP TABLE RDE_APC_DIAGNOSIS
-	CREATE TABLE RDE_APC_DIAGNOSIS (
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_APC_DIAGNOSIS', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_APC_DIAGNOSIS
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_APC_DIAGNOSIS (
 		CDS_APC_ID				VARCHAR(20)
+		,PERSONID				VARCHAR(40)
 		,MRN                    VARCHAR(20)
 		,[ICD_Diagnosis_Num]	INT
 		,[ICD_Diagnosis_Cd]		VARCHAR(10)
@@ -362,9 +462,10 @@ IF @APCDiagnosis=1
 
   SELECT @StartDate =GETDATE()
 
-       INSERT INTO RDE_APC_DIAGNOSIS
+       INSERT INTO  BH_RESEARCH.DBO.RDE_APC_DIAGNOSIS
          SELECT DISTINCT
 	     	CONVERT(VARCHAR(20),Apc.CDS_APC_ID)                         AS CDS_APC_ID
+			,CONVERT(VARCHAR(20),APC.PERSON_ID)                      AS PERSONID
 			,PAT.MRN													AS MRN
 		    ,CONVERT(INT,[ICD_Diagnosis_Num])                           AS ICD_Diagnosis_Num
 		    ,CONVERT(VARCHAR(10),[ICD_Diagnosis_Cd])                    AS ICD_Diagnosis_Cd
@@ -373,17 +474,14 @@ IF @APCDiagnosis=1
 		    ,CONVERT(VARCHAR(16),Apc.Start_Dt,120)                      AS Activity_date
 		    ,CONVERT(VARCHAR(16),[CDS_Activity_Dt],120)                 AS [CDS_Activity_Dt]
 		
-         FROM  
-                  RDE_Patient_Demographics Pat
-			INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_APC_TAIL] Tail with (nolock)
-				 ON PAT.PERSON_ID=TAIL.Person_ID
-			INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_APC] Apc with (nolock)
-		         ON TAIL.CDS_APC_ID=APC.CDS_APC_ID
-	        INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_APC_ICD_DIAG] Icd with (nolock)
-		         ON Icd.[CDS_APC_Id] = Apc.[CDS_APC_Id] 
-	        LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_ICD_DIAG] ICDDESC with (nolock)
-		         ON Icd.ICD_Diagnosis_Cd = ICDDESC.[ICD_Diag_Cd]
-			WHERE CAST(Apc.Disch_Dt AS DATE)>=@DATE
+            FROM [BH_DATAWAREHOUSE].[dbo].[CDS_APC_ICD_DIAG] Icd with (nolock)
+            INNER JOIN  BH_RESEARCH.DBO.TempAPC Apc with (nolock)
+            ON Icd.CDS_APC_ID=APC.CDS_APC_ID
+            INNER JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics Pat ON Pat.PERSON_ID = APC.PERSON_ID
+			LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_ICD_DIAG] ICDDESC with (nolock)
+			ON Icd.ICD_Diagnosis_Cd = ICDDESC.[ICD_Diag_Cd]
+			WHERE PAT.MRN IS NOT NULL
+			AND CAST(Apc.Start_Dt AS DATE)>=@DATE
 			ORDER BY Activity_date
 
 SELECT @Row_Count=@@ROWCOUNT	
@@ -393,7 +491,7 @@ SET @ErrorMessage='Inpatient diagnosis details inserted into Temptable'
 
 --ADD DOUBLE QUOTES AROUND THE ICD DIAGNOSIS DECRIPTION FIELD
 
-CREATE INDEX indx_CDS_APC_ID ON RDE_APC_DIAGNOSIS (CDS_APC_ID)
+CREATE INDEX indx_CDS_APC_ID ON  BH_RESEARCH.DBO.RDE_APC_DIAGNOSIS (CDS_APC_ID)
 
 
 SELECT	@EndDate = GETDATE();
@@ -417,9 +515,10 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=90
 Set @ErrorMessage='Inpatient Procedures'
  
-IF OBJECT_ID(N'RDE_APC_OPCS', N'U') IS NOT NULL DROP TABLE RDE_APC_OPCS
-	CREATE TABLE RDE_APC_OPCS (
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_APC_OPCS', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_APC_OPCS
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_APC_OPCS (
 		CDS_APC_ID			 VARCHAR(20)
+		,PERSONID				VARCHAR(40)
 		,MRN                 VARCHAR(20)
 		,OPCS_Proc_Num		 INT
 		,OPCS_Proc_Scheme_Cd VARCHAR(10)
@@ -440,9 +539,10 @@ IF @APCProcedures=1
   
 
 
-     INSERT INTO RDE_APC_OPCS
+     INSERT INTO  BH_RESEARCH.DBO.RDE_APC_OPCS
         SELECT DISTINCT
 		    CONVERT(VARCHAR(20),Apc.CDS_APC_ID)						AS CDS_APC_ID
+		   ,APC.PERSON_ID                                        AS PERSONID
 		   ,Pat.MRN													AS MRN
 		   ,CONVERT(INT,OPCS_Proc_Num)								AS OPCS_Proc_Num
 		   ,CONVERT(VARCHAR(10),OPCS_Proc_Scheme_Cd)				AS OPCS_Proc_Scheme_Cd
@@ -452,21 +552,18 @@ IF @APCProcedures=1
 		   ,Pat.NHS_Number											AS NHS_Number
 		   ,CONVERT(VARCHAR(16),Apc.Start_Dt,120)					AS Activity_date
 		   ,CONVERT(VARCHAR(16),[CDS_Activity_Dt],120)				AS [CDS_Activity_Dt]
-	    FROM  RDE_Patient_Demographics Pat
-		    INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_APC_TAIL] Tail with (nolock)
-			   ON PAT.PERSON_ID=TAIL.Person_ID
-		   INNER  JOIN  [BH_DATAWAREHOUSE].[dbo].[CDS_APC] Apc with (nolock)
-	 	       ON Tail.CDS_APC_ID =  apc.CDS_APC_ID
-		   INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_APC_OPCS_PROC] OPCS with (nolock)
-		       ON OPCS.[CDS_APC_Id] = APC.[CDS_APC_Id] --AND [Last_Ep_Id]=1
-		   LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_OPCS_49] PDesc with (nolock)
-		       ON OPCS.OPCS_Proc_Cd = PDesc.Proc_Cd
-			WHERE CAST(Apc.Disch_Dt AS DATE)>=@DATE
-			ORDER BY Activity_date
+  FROM [BH_DATAWAREHOUSE].[dbo].[CDS_APC_OPCS_PROC] OPCS with (nolock)
+              INNER JOIN  BH_RESEARCH.DBO.TempAPC Apc with (nolock)
+            ON OPCS.CDS_APC_ID=APC.CDS_APC_ID
+        LEFT JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics Pat ON Pat.PERSON_ID = APC.PERSON_ID
+        LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_OPCS_49] PDesc with (nolock)
+        ON OPCS.OPCS_Proc_Cd = PDesc.Proc_Cd
+        WHERE PAT.MRN IS NOT NULL
+        AND CAST(Apc.Start_Dt AS DATE)>=@DATE
 
 SELECT @Row_Count=@@ROWCOUNT
 		
-CREATE INDEX indx_CDS_APCID ON RDE_APC_OPCS (CDS_APC_ID)
+CREATE INDEX indx_CDS_APCID ON  BH_RESEARCH.DBO.RDE_APC_OPCS (CDS_APC_ID)
 
 SET @ErrorPosition=110
 SET @ErrorMessage='Inpatient Procedures inserted into Temptable'	
@@ -487,9 +584,10 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=120
 SET @ErrorMessage='Outpatient Diagnosis'
 
-IF OBJECT_ID(N'RDE_OP_DIAGNOSIS', N'U') IS NOT NULL DROP TABLE RDE_OP_DIAGNOSIS
-	CREATE TABLE RDE_OP_DIAGNOSIS (
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_OP_DIAGNOSIS', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_OP_DIAGNOSIS
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_OP_DIAGNOSIS (
 		CDS_OPA_ID				VARCHAR(20)
+		,PERSONID				VARCHAR(40)
 		,MRN      				VARCHAR(20)
 		,[ICD_Diagnosis_Num]	INT
 		,[ICD_Diagnosis_Cd]		VARCHAR(10)
@@ -506,9 +604,10 @@ IF @OPADiagnosis=1
 
    SELECT @StartDate =GETDATE()
 
-       INSERT INTO RDE_OP_DIAGNOSIS
+       INSERT INTO  BH_RESEARCH.DBO.RDE_OP_DIAGNOSIS
          SELECT DISTINCT
 	     	CONVERT(VARCHAR(20),OP.CDS_OPA_ID)										AS CDS_OPA_ID
+			,OP.PERSON_ID                                        AS PERSONID
 			,Pat.MRN																AS MRN
 		    ,CONVERT(INT,[ICD_Diag_Num])											AS ICD_Diagnosis_Num
 		    ,CONVERT(VARCHAR(10),Icd.[ICD_Diag_Cd])									AS ICD_Diagnosis_Cd
@@ -517,17 +616,15 @@ IF @OPADiagnosis=1
 		    ,CONVERT(VARCHAR(16),OP.Att_Dt ,120)									AS Activity_date
 		    ,CONVERT(VARCHAR(16),[CDS_Activity_Dt] ,120)							AS [CDS_Activity_Dt]
 		
-         FROM  RDE_Patient_Demographics Pat
-			 INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_OP_ALL_TAIL] Tail with (nolock)
-				 ON pat.PERSON_ID=tail.Person_ID AND (Tail.Record_Type='20' OR Tail.Record_Type='020')
-		     INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_OP_ALL] OP with (nolock)
-				 ON Tail.CDS_OPA_ID= OP.CDS_OPA_ID
-	         INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_OPA_ICD_DIAG] Icd with (nolock)
-		         ON Icd.[CDS_OPA_Id] = OP.[CDS_OPA_Id] 
-	         LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_ICD_DIAG] ICDDESC with (nolock)
-		         ON Icd.[ICD_Diag_Cd] = ICDDESC.[ICD_Diag_Cd] 
-            WHERE CAST(OP.Att_Dt AS DATE)>=@DATE AND ICD.ICD_Diag_Cd IS NOT NULL
-			ORDER BY Activity_date
+FROM [BH_DATAWAREHOUSE].[dbo].[CDS_OPA_ICD_DIAG] Icd with (nolock)
+              INNER JOIN  BH_RESEARCH.DBO.TempOPA OP with (nolock)
+            ON Icd.CDS_OPA_ID=OP.CDS_OPA_ID
+LEFT JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics Pat ON Pat.PERSON_ID = OP.PERSON_ID
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_ICD_DIAG] ICDDESC with (nolock)
+ON Icd.ICD_Diag_Cd = ICDDESC.[ICD_Diag_Cd]
+WHERE PAT.MRN IS NOT NULL
+AND CAST(OP.Att_Dt AS DATE)>=@DATE AND ICD.ICD_Diag_Cd IS NOT NULL
+
 
 SELECT @Row_Count=@@ROWCOUNT
 
@@ -554,9 +651,10 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=150	
 SET @ErrorMessage='Outpatient procedure'
 
-IF OBJECT_ID(N'RDE_OPA_OPCS', N'U') IS NOT NULL DROP TABLE RDE_OPA_OPCS
-	CREATE TABLE RDE_OPA_OPCS(
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_OPA_OPCS', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_OPA_OPCS
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_OPA_OPCS(
 		CDS_OPA_ID				VARCHAR(20)
+		,PERSONID				VARCHAR(40)
 		,MRN                    VARCHAR(20)
 	    ,OPCS_Proc_Num			INT
 	    ,OPCS_Proc_Scheme_Cd	VARCHAR(10)
@@ -574,9 +672,10 @@ IF @OPAProcedures=1
 
   SELECT @StartDate=GETDATE()
 
-     INSERT INTO RDE_OPA_OPCS
+     INSERT INTO  BH_RESEARCH.DBO.RDE_OPA_OPCS
         SELECT DISTINCT
 		    CONVERT(VARCHAR(20),OP.CDS_OPA_ID)                                                AS CDS_OPA_ID
+		    ,OP.PERSON_ID                                        AS PERSONID
 			,Pat.MRN																		  AS MRN
 		    ,CONVERT(INT,OPCS_Proc_Num)                                                       AS OPCS_Proc_Num
 		    ,CONVERT(VARCHAR(10),OPCS_Proc_Scheme_Cd)                                         AS OPCS_Proc_Scheme_Cd
@@ -586,21 +685,19 @@ IF @OPAProcedures=1
 		    ,Pat.NHS_Number                                               					  AS NHS_Number
 		    ,CONVERT(VARCHAR(16),OP.[CDS_Activity_Dt],120)                                    AS [CDS_Activity_Dt]
 		
-	     FROM RDE_Patient_Demographics Pat
-			INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_OP_ALL_TAIL] Tail with (nolock)
-			     ON PAT.PERSON_ID=TAIL.Person_ID AND ( Tail.RECORD_TYPE='020' OR Tail.RECORD_TYPE='20') 
-		    INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_OP_ALL] OP with (nolock)
-		         ON Tail.CDS_OPA_ID=OP.CDS_OPA_ID AND ( OP.RECORD_TYPE='020' OR OP.RECORD_TYPE='20') 
-		    INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_OPA_OPCS_PROC] OPCS with (nolock)
-		         ON OPCS.[CDS_OPA_Id] = OP.[CDS_OPA_Id]
-		    LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_OPCS_49] OPDesc with (nolock)
-		         ON OPCS.OPCS_Proc_Cd = OPDesc.Proc_Cd
-			WHERE CAST(OP.Att_Dt AS DATE)>=@DATE
-		    ORDER BY OPCS_Proc_Dt
+FROM [BH_DATAWAREHOUSE].[dbo].[CDS_OPA_OPCS_PROC] OPCS with (nolock)
+              INNER JOIN  BH_RESEARCH.DBO.TempOPA OP with (nolock)
+            ON OPCS.CDS_OPA_ID=OP.CDS_OPA_ID
+LEFT JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics Pat ON Pat.PERSON_ID = OP.PERSON_ID
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_OPCS_49] OPDesc with (nolock)
+ON OPCS.OPCS_Proc_Cd = OPDesc.Proc_Cd
+WHERE PAT.MRN IS NOT NULL
+AND CAST(OP.Att_Dt AS DATE)>=@DATE
+
 
 SELECT @Row_Count=@@ROWCOUNT
 
-CREATE INDEX indx_CDS_OPA ON RDE_OPA_OPCS (CDS_OPA_ID)
+CREATE INDEX indx_CDS_OPA ON  BH_RESEARCH.DBO.RDE_OPA_OPCS (CDS_OPA_ID)
 
 SET @ErrorPosition=170
 SET @ErrorMessage='Outpatient procedure deatils inserted into Temptable'
@@ -628,9 +725,10 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=180
 SET @ErrorMessage='Inpatient Attendance'
 
-IF OBJECT_ID(N'RDE_CDS_APC', N'U') IS NOT NULL DROP TABLE RDE_CDS_APC
-	CREATE TABLE RDE_CDS_APC (
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_CDS_APC', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_CDS_APC
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_CDS_APC (
 		CDS_APC_ID				VARCHAR(20)
+		,PERSONID				VARCHAR(40)
 		,MRN					VARCHAR(20)
 		,[Adm_Dt]				VARCHAR(16)
 		,[Disch_Dt]				VARCHAR(16)
@@ -663,9 +761,10 @@ IF @Inpatient=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_CDS_APC
+     INSERT INTO  BH_RESEARCH.DBO.RDE_CDS_APC
         SELECT DISTINCT
 		   CONVERT(VARCHAR(20),APC.CDS_APC_ID)																AS CDS_APC_ID
+		   ,LALIAS.PERSON_ID                                        AS PERSONID
 		   ,Pat.MRN																							AS MRN
 		   ,CONVERT(VARCHAR(16),[Adm_Dt],120)																AS [Adm_Dt]
 		   ,CONVERT(VARCHAR(16),APC.[Disch_Dt],120)															AS [Disch_Dt]
@@ -678,7 +777,7 @@ IF @Inpatient=1
 		   ,CONVERT(VARCHAR(max),dbo.csvString([Patient_Class_Desc]))			            								AS [Patient_Class_Desc]
 		   ,CONVERT(VARCHAR(100),dbo.csvString(SUBSTRING([Patient_Class_Desc],0,CHARINDEX('-',[Patient_Class_Desc],0))))	AS PatClass_Desc
 		   ,CONVERT(VARCHAR(100),APC.Admin_Cat_Cd)															AS Admin_Cat_Cd
-		   ,CONVERT(VARCHAR(max),dbo.csvString(Admin_Cat_Desc) )															AS Admin_Cat_Desc 
+		   ,CONVERT(VARCHAR(max),dbo.csvString(AC.Admin_Cat_Desc) )															AS Admin_Cat_Desc 
 		   ,CONVERT(VARCHAR(100),APC.Admiss_Srce_Cd)														AS Admiss_Srce_Cd  
 		   ,CONVERT(VARCHAR(max),dbo.csvString(Admiss_Source_Desc))														AS Admiss_Source_Desc
 		   ,CONVERT(VARCHAR(100),APC.Disch_Dest)															AS Disch_Dest
@@ -690,45 +789,44 @@ IF @Inpatient=1
 		   ,CONVERT(VARCHAR(16),APC.[CDS_Activity_Dt] ,120)													AS [CDS_Activity_Dt]
 		   ,CONVERT(VARCHAR(1000),dbo.csvString(Descr.CODE_DESC_TXT) )														AS ENC_DESC
 		   
-	     FROM RDE_Patient_Demographics Pat
-		    
-		   INNER JOIN [BH_DATAWAREHOUSE].[dbo].CDS_APC_TAIL APCTail with (nolock)
-				ON Pat.PERSON_ID=APCTail.Person_ID
-		   INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_APC] APC with (nolock)
-		        ON APCTail.CDS_APC_ID = APC.CDS_APC_ID
-		   INNER JOIN [BH_DATAWAREHOUSE].[dbo].[SLAM_APC_HRG_v4] HRG with (nolock)
-		       ON HRG.MRN = APC.MRN AND HRG.CDS_APC_Id=APC.CDS_APC_ID 
-		   LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[LKP_HRG_v4] HRGDesc with (nolock)
-		       ON HRG.Spell_HRG_Cd = HRGDesc.[HRG_Cd] 
-		   LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_PATIENT_CLASS] PC with (nolock)
-		       ON HRG.[Ptnt_Class]=PC.[Patient_Class_Cd]
-           LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[LKP_CDS_ADMIN_CAT] AC
-			   ON APC.Admin_Cat_Cd=AC.Admin_Cat_Cd
-           LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[LKP_CDS_ADMISS_SOURCE] ASrce
-			   ON APC.Admiss_Srce_Cd=ASrce.Admiss_Source_Cd
-           LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[LKP_CDS_DISCH_DEST] DS
-			   ON APC.[Disch_Dest]=DS.DISCH_DEST_CD
-		   LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.CDS_EAL_TAIL EalTl  
-			   ON APCTail.Encounter_ID=EalTl.Encounter_ID AND EalTl.Record_Type='060'
-	       LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.CDS_EAL_ENTRY WL
-		       ON WL.CDS_EAL_Id = EalTl.CDS_EAL_ID
-           LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_PRIORITY_TYPE] PT
-			   ON PT.[Priority_Type_Cd]=WL.[Priority_Type_Cd]
-		   LEFT OUTER JOIN RDE_Encounter Enc
-               ON APCTail.Encounter_ID=Enc.ENCNTR_ID
-           LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Descr  with (nolock)
-               ON Enc.[ENC_TYPE_CD] = Descr.CODE_VALUE_CD
-			WHERE CAST(APC.Disch_Dt AS DATE)>=@DATE
-			ORDER BY [Adm_Dt]
+FROM [BH_DATAWAREHOUSE].[dbo].[SLAM_APC_HRG_v4] HRG with (nolock)
+LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_APC] APC with (nolock)
+ON HRG.CDS_APC_Id=APC.CDS_APC_ID
+INNER JOIN BH_RESEARCH.DBO.TempAPC LALIAS with (nolock)
+ON LALIAS.CDS_APC_ID=APC.CDS_APC_ID
+LEFT JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics Pat ON Pat.PERSON_ID = LALIAS.PERSON_ID
+LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].[LKP_HRG_v4] HRGDesc with (nolock)
+ON HRG.Spell_HRG_Cd = HRGDesc.[HRG_Cd] 
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_PATIENT_CLASS] PC with (nolock)
+ON HRG.[Ptnt_Class]=PC.[Patient_Class_Cd]
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[LKP_CDS_ADMIN_CAT] AC
+ON APC.Admin_Cat_Cd=AC.Admin_Cat_Cd
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[LKP_CDS_ADMISS_SOURCE] ASrce
+ON APC.Admiss_Srce_Cd=ASrce.Admiss_Source_Cd
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[LKP_CDS_DISCH_DEST] DS
+ON APC.[Disch_Dest]=DS.DISCH_DEST_CD
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.CDS_EAL_TAIL EalTl  
+ON LALIAS.PERSON_ID=EalTl.Encounter_ID AND EalTl.Record_Type='060'
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.CDS_EAL_ENTRY WL
+ON WL.CDS_EAL_Id = EalTl.CDS_EAL_ID
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_PRIORITY_TYPE] PT
+ON PT.[Priority_Type_Cd]=WL.[Priority_Type_Cd]
+LEFT OUTER JOIN  BH_RESEARCH.DBO.RDE_Encounter Enc
+ON LALIAS.PERSON_ID=Enc.ENCNTR_ID
+LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Descr  with (nolock)
+ON Enc.[ENC_TYPE_CD] = Descr.CODE_VALUE_CD
+WHERE PAT.MRN IS NOT NULL
+AND CAST(APC.Disch_Dt AS DATE)>=@DATE
+ORDER BY [Adm_Dt]
 
 
 
 
 
 SELECT @Row_Count=@@ROWCOUNT			
-			--select * from RDE_CDS_OPA
+			--select * from  BH_RESEARCH.DBO.RDE_CDS_OPA
 
-CREATE INDEX indx_CDS_APC ON RDE_CDS_APC (CDS_APC_ID)
+CREATE INDEX indx_CDS_APC ON  BH_RESEARCH.DBO.RDE_CDS_APC (CDS_APC_ID)
 
 SET @ErrorPosition=200
 SET @ErrorMessage='Inpatient details inserted into Temptable'
@@ -756,9 +854,10 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=210
 Set @ErrorMessage='Outpatient Attendance'
 
-IF OBJECT_ID(N'RDE_CDS_OPA', N'U') IS NOT NULL DROP TABLE RDE_CDS_OPA
-	CREATE TABLE RDE_CDS_OPA (
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_CDS_OPA', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_CDS_OPA
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_CDS_OPA (
 		CDS_OPA_ID					VARCHAR(20)
+		,PERSONID				VARCHAR(40)
 		,MRN						VARCHAR(20)
 		,[Att_Dt]					VARCHAR(16)
 		,Treat_Func_Cd				VARCHAR(10)
@@ -779,9 +878,10 @@ IF @Outpatient=1
   BEGIN
 
   SELECT @StartDate =GETDATE ()
-        INSERT INTO RDE_CDS_OPA
+        INSERT INTO  BH_RESEARCH.DBO.RDE_CDS_OPA
           SELECT DISTINCT 
 	     	  CONVERT(VARCHAR(20),OPALL.CDS_OPA_ID)                             AS CDS_OPA_ID
+			 ,LALIAS.PERSON_ID                                        AS PERSONID
 			 ,Pat.MRN															AS MRN
 		     ,CONVERT(VARCHAR(16),OPALL.[Att_Dt],120)							AS [Att_Dt]
 		     ,CONVERT(VARCHAR(10),OPALL.Treat_Func_Cd)							AS Treat_Func_Cd
@@ -791,14 +891,13 @@ IF @Outpatient=1
 		     ,CONVERT(VARCHAR(100),dbo.csvString(AD.Attended_Desc))							AS Attended_Desc
 		     ,CONVERT(VARCHAR(300),dbo.csvString(AO.Attendance_Outcome_Desc))					AS Attendance_Outcome_Desc
 		     ,Pat.NHS_Number													AS NHS_NUMBER
-		     ,CONVERT(VARCHAR(16),[CDS_Activity_Dt],120)						AS [CDS_Activity_Dt]
+		     ,CONVERT(VARCHAR(16),LALIAS.[CDS_Activity_Dt],120)						AS [CDS_Activity_Dt]
 		     ,CONVERT(VARCHAR(100),dbo.csvString(AttType.[CODE_DESC_TXT]))						AS Atten_TypeDesc
 		     ,CONVERT(VARCHAR(100),dbo.csvString(Descr.CODE_DESC_TXT ))						AS ENC_DESC
-	     FROM RDE_Patient_Demographics Pat
-		    INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_OP_ALL_Tail] OPTail with (nolock)
-				ON PAT.PERSON_ID=OPTAIL.PERSON_ID AND (OPTAIL.[Record_Type]='020' OR OPTail.[Record_Type]='20')
-		    INNER JOIN [BH_DATAWAREHOUSE].[dbo].[CDS_OP_ALL] OPALL with (nolock)
-		        ON OPTAIL.CDS_OPA_ID=OPALL.CDS_OPA_ID AND (OPALL.[Record_Type]='020' OR OPALL.[Record_Type]='20')AND OPALL.Att_Or_DNA_Cd in (5,6)-- and [Is_Valid]=1
+			 FROM [BH_DATAWAREHOUSE].[dbo].[CDS_OP_ALL] OPALL with (nolock)
+			 INNER JOIN BH_RESEARCH.DBO.TempOPA LALIAS with (nolock)
+			ON LALIAS.CDS_OPA_ID=OPALL.CDS_OPA_ID
+			LEFT JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics Pat ON Pat.PERSON_ID = LALIAS.PERSON_ID
 		    INNER JOIN [BH_DATAWAREHOUSE].[dbo].[SLAM_OP_HRG] HRG with (nolock)
 		        ON HRG.MRN = OPALL.MRN AND HRG.CDS_OPA_Id=OPALL.CDS_OPA_ID 
 		    LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].PI_CDE_OP_ATTENDANCE CDE  with (nolock)
@@ -815,16 +914,15 @@ IF @Outpatient=1
                 ON CDE.[APPT_TYPE_CD] = AttType.[CODE_VALUE_CD]
 			LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].CDS_OP_ALL_TAIL OPATail with (nolock)
                 ON OPATail.CDS_OPA_ID=OPALL.CDS_OPA_ID AND OPALL.CDS_Activity_Dt=CAST (OPATail.Activity_Dt_Tm AS DATE)
-			LEFT OUTER JOIN RDE_Encounter Enc
+			LEFT OUTER JOIN  BH_RESEARCH.DBO.RDE_Encounter Enc
                 ON OPATail.Encounter_ID=Enc.ENCNTR_ID
             LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Descr  with (nolock)
                 ON Enc.[ENC_TYPE_CD] = Descr.CODE_VALUE_CD
 			WHERE CAST(OPALL.Att_Dt AS DATE)>=@date
-			ORDER BY [Att_Dt]
 
 Select @Row_Count=@@ROWCOUNT
 
-CREATE INDEX indx_CDS_OPA_ID ON RDE_CDS_OPA (CDS_OPA_ID)
+CREATE INDEX indx_CDS_OPA_ID ON  BH_RESEARCH.DBO.RDE_CDS_OPA (CDS_OPA_ID)
 
 Set @ErrorPosition=220
 Set @ErrorMessage='Outpatient Attendance details inserted into Temptable'
@@ -837,7 +935,7 @@ select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(1
 INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
 			VALUES (@Extract_id,'Outpatient Attendance',@StartDate, @EndDate,@time,@Row_Count)
   END
-  --select * from RDE_CDS_OPA
+  --select * from  BH_RESEARCH.DBO.RDE_CDS_OPA
 ---------------------------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------------------
 ----PATHOLOGY
@@ -855,9 +953,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=230
 Set @ErrorMessage='Pathology details'
  
-IF OBJECT_ID(N'RDE_Pathology', N'U') IS NOT NULL DROP TABLE RDE_Pathology
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_Pathology', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_Pathology
 
-	CREATE TABLE RDE_Pathology (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_Pathology (
 	     ENCNTR_ID			VARCHAR(20)
 		,PERSONID				VARCHAR(40)
 		,MRN                    VARCHAR(20)
@@ -868,6 +966,7 @@ IF OBJECT_ID(N'RDE_Pathology', N'U') IS NOT NULL DROP TABLE RDE_Pathology
 		,TestDesc				VARCHAR(350)
 		,Result_nbr				VARCHAR(30)
 		,ResultTxt				VARCHAR(350)
+		,ResultNumeric			BIT
 		,[ResultUnit]			VARCHAR(20)
 		,[ResUpper]				VARCHAR(20)
 		,[ResLower]				VARCHAR(20)
@@ -877,7 +976,8 @@ IF OBJECT_ID(N'RDE_Pathology', N'U') IS NOT NULL DROP TABLE RDE_Pathology
 		,OrderStatus			VARCHAR(50)
 		,ResStatus				VARCHAR(50)
 		,SnomedCode				VARCHAR(100)
-		,EventID                VARCHAR(50))
+		,EventID                VARCHAR(50)
+		,LabNo                  VARCHAR(50))
 
 Set @ErrorPosition=240
 Set @ErrorMessage='Pathology Temp table created'
@@ -887,7 +987,7 @@ IF @Pathology=1
    
    SELECT @StartDate =GETDATE()
 
-	INSERT INTO RDE_Pathology
+	INSERT INTO  BH_RESEARCH.DBO.RDE_Pathology
        SELECT DISTINCT 
 	        
             Enc.ENCNTR_ID
@@ -900,6 +1000,7 @@ IF @Pathology=1
            ,CONVERT(VARCHAR(350),dbo.csvString(EVNTdes.CODE_DESC_TXT))                AS TestDesc                --CHILD EVENT(DETAILS)
            ,CONVERT(VARCHAR(30),EVE.EVENT_RESULT_NBR )                 AS Result_nbr
            ,CONVERT(VARCHAR(350),dbo.csvString(EVE.EVENT_RESULT_TXT))                 AS ResultTxt
+		   ,CASE WHEN ISNUMERIC(EVE.EVENT_RESULT_TXT) <> 1 THEN 0 ELSE 1 END			AS ResultNumeric		   
            ,CONVERT(VARCHAR(20),dbo.csvString(Evres.CODE_DESC_TXT))                   AS [ResultUnit]
            ,CONVERT(VARCHAR(20),dbo.csvString(EVE.[NORMAL_VALUE_HIGH_TXT]))           AS [ResUpper]
            ,CONVERT(VARCHAR(20),dbo.csvString(EVE.NORMAL_VALUE_LOW_TXT))              AS [ResLower]
@@ -910,16 +1011,17 @@ IF @Pathology=1
 	       ,CONVERT(VARCHAR(50),dbo.csvString(RESstat.CODE_DESC_TXT) )                AS ResStatus
 		   ,CONVERT(VARCHAR(100),ORD.CONCEPT_CKI_IDENT)				   AS SnomedCode
 		   ,CONVERT(VARCHAR(150),EVE.EVENT_ID)						   AS EventID
-      FROM  RDE_Encounter ENC
-            INNER JOIN  TempOrder ORD  with (nolock)
+		   ,CONVERT(VARCHAR(50), LEFT(EVE.REFERENCE_NBR, 11))		   AS LabNo
+      FROM   BH_RESEARCH.DBO.RDE_Encounter ENC
+            INNER JOIN  BH_RESEARCH.DBO.TempOrder ORD  with (nolock)
 	            ON 
 				ENC.ENCNTR_ID=ORD.ENCNTR_ID
 	               AND ord.LAST_ORDER_STATUS_CD=2543 AND ord.ORDERABLE_TYPE_CD=2513 --Only extracting completed laboratory data  
 				   --2513 Laboratory    --2543  Completed,  10576 Laboratory
-	        INNER JOIN  TempCE EVE  with (nolock)
+	        INNER JOIN BH_RESEARCH.DBO.TempCE  EVE  with (nolock)
 	            ON ORD.ENCNTR_ID=EVE.ENCNTR_ID AND ORD.ORDER_ID=EVE.ORDER_ID
 	               AND EVE.CONTRIBUTOR_SYSTEM_CD = '6378204' and EVE.CONTRIBUTOR_SYSTEM_CD is not null  --6378204  PATHOLOGY   
-	        LEFT OUTER JOIN TempCE EVNT2  with (nolock)  
+	        LEFT OUTER JOIN BH_RESEARCH.DBO.TempCE  EVNT2  with (nolock)  
 	            ON EVE.PARENT_EVENT_ID=EVNT2.EVENT_ID
             LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].PI_LKP_CDE_CODE_VALUE_REF Evres with (nolock)
 	            ON EVE.EVENT_RESULT_UNITS_CD = Evres.CODE_VALUE_CD 
@@ -935,14 +1037,14 @@ IF @Pathology=1
 	            ON ORD.LAST_ORDER_STATUS_CD = ORDStat.CODE_VALUE_CD  
 	        LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].PI_LKP_CDE_CODE_VALUE_REF RESstat with (nolock)
 	            ON eve.EVENT_RESULT_STATUS_CD = RESstat.CODE_VALUE_CD 
-			LEFT OUTER JOIN  TempBLOB D with (nolock)
+			LEFT OUTER JOIN  BH_RESEARCH.DBO.TempBLOB D with (nolock)
 				ON EVE.EVENT_ID=d.EVENT_ID or EVNT2.EVENT_ID=d.EVENT_ID
 --	        ORDER BY [RequestDate] 
 
 
 SELECT @Row_Count=@@ROWCOUNT
 
-CREATE INDEX indx_Patho ON RDE_Pathology (NHS_Number)
+CREATE INDEX indx_Patho ON  BH_RESEARCH.DBO.RDE_Pathology (NHS_Number)
 
 SET @ErrorPosition=250
 SET @ErrorMessage='Pathology details inserted into Temptable'
@@ -954,6 +1056,70 @@ SELECT @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(1
 
 INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
 			VALUES (@Extract_id,'Pathology', @StartDate, @EndDate,@time,@Row_Count)
+
+
+--------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------
+---New Pathology
+-------------------------------------------------------------------------
+--Update the research tables with the latest values.
+
+SET @ErrorPosition=255
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_RAW_PATHOLOGY', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_RAW_PATHOLOGY
+SELECT
+    Demo.PERSON_ID,
+	Demo.NHS_Number,
+	Demo.MRN,
+    PRES.LabNo,
+	PRES.TLCCode,
+	PMOR.CSpecTypeCode AS Specimen,
+	PMOR.SnomedCTCode AS TLCSnomed,
+	dbo.csvString(PMOR.TLCDesc_Full) AS TLCDesc,
+    PRES.TFCCode,
+    PRES.LegTFCCode AS Subcode,
+    PRES.WkgCode,
+	CASE WHEN(PRES.NotProcessed = 1) THEN 0 ELSE 1 END AS Processed,
+    dbo.csvString(PRES.Result1stLine) AS Result,
+    CASE WHEN PRES.Result1stLine IS NOT NULL AND PRES.Result1stLine != '.' AND ISNUMERIC(LEFT(PRES.Result1stLine, 100)) = 1 THEN 1 ELSE 0 END AS ResultNumeric,
+    PRES.ResultIDNo,
+    PMRT.SectionCode,
+    dbo.csvString(PMRT.TFCDesc_Full) AS TFCDesc,
+    PSL.RequestDT,
+    PSL.SampleDT,
+    PSL.ReportDate,
+    PSL.Fasting,
+    PSL.Pregnant,
+    PSL.RefClinCode,
+    PSL.RefSourceCode,
+    dbo.csvString(PSL.ClinicalDetails) AS ClinicalDetails
+    INTO [BH_RESEARCH].[dbo].[RDE_RAW_PATHOLOGY]
+FROM [BH_RESEARCH].[dbo].[PATH_Patient_ResultableLevel] PRES WITH (NOLOCK)
+LEFT OUTER JOIN [BH_RESEARCH].[dbo].[PATH_Master_Resultables] PMRT WITH (NOLOCK)
+    ON PRES.TFCCode = PMRT.TFCCode
+LEFT OUTER JOIN [BH_RESEARCH].[dbo].[PATH_Master_ORDERABLES] PMOR WITH (NOLOCK)
+    ON PRES.TLCCode = PMOR.TLCCode
+LEFT OUTER JOIN [BH_RESEARCH].[dbo].[PATH_Patient_SampleLevel] PSL WITH (NOLOCK)
+    ON PRES.LabNo = PSL.LabNo
+LEFT JOIN [BH_RESEARCH].[dbo].[RDE_Patient_Demographics] Demo WITH (NOLOCK)
+ON PSL.PERSON_ID = Demo.PERSON_ID
+WHERE Demo.PERSON_ID IS NOT NULL
+ORDER BY PRES.LabNo ASC, PRES.TFCCode ASC, PRES.ResultIDNo ASC;
+
+
+SELECT @Row_Count=@@ROWCOUNT
+
+CREATE INDEX indx_Patho ON  BH_RESEARCH.DBO.RDE_RAW_Pathology (NHS_Number)
+
+SET @ErrorPosition=251
+SET @ErrorMessage='Raw athology details inserted into Temptable'
+
+SELECT	@EndDate = GETDATE();
+SELECT @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
+            + CAST( DATEPART(MINUTE, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  MINS '
+            + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
+
+INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
+			VALUES (@Extract_id,'Raw Pathology', @StartDate, @EndDate,@time,@Row_Count)
   END
 
 
@@ -964,9 +1130,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=260
 Set @ErrorMessage='Pharmacy ARIA'
 
-IF OBJECT_ID(N'RDE_ARIAPharmacy', N'U') IS NOT NULL DROP TABLE RDE_ARIAPharmacy
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_ARIAPharmacy', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_ARIAPharmacy
 
-	CREATE TABLE RDE_ARIAPharmacy (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_ARIAPharmacy (
         NHS_Number				VARCHAR(10)
 		,MRN                    VARCHAR(30)
 	    ,AdmnStartDate			VARCHAR(16)
@@ -991,7 +1157,7 @@ IF @PharmacyAria=1
   BEGIN
 
   SELECT @StartDate =GETDATE ()
-     INSERT INTO RDE_ARIAPharmacy
+     INSERT INTO  BH_RESEARCH.DBO.RDE_ARIAPharmacy
          SELECT 
 
               D.NHS_Number									 			AS NHS_Number
@@ -1010,7 +1176,7 @@ IF @PharmacyAria=1
 			 
 
         FROM  [BH_DATAWAREHOUSE].[dbo].[ARIA_PT_INST_KEY] Ptkey  with (nolock)
-            INNER JOIN RDE_Patient_Demographics D  
+            INNER JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics D  
 		         ON (D.NHS_Number=REPLACE(ptkey.pt_key_value,' ',''))--OR  (ptkey.pt_key_value=D.MRN))
             INNER JOIN [BH_DATAWAREHOUSE].[dbo].[ARIA_AGT_RX] Arx  with (nolock)
                  ON Arx.pt_id=Ptkey.pt_id 
@@ -1022,7 +1188,7 @@ IF @PharmacyAria=1
 
 SELECT @Row_Count=@@ROWCOUNT
 
-CREATE INDEX indx_Aria ON RDE_ARIAPharmacy (NHS_Number)
+CREATE INDEX indx_Aria ON  BH_RESEARCH.DBO.RDE_ARIAPharmacy (NHS_Number)
 
 SET @ErrorPosition=280
 SET @ErrorMessage='Pharmacy details inserted into Temptable'
@@ -1034,7 +1200,50 @@ SELECT @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(1
 
 INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
 			VALUES (@Extract_id,'ARIA', @StartDate, @EndDate,@time,@Row_Count)
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------
+---iQemo update Pharmacy data
+-------------------------------------------------------------------------
+
+Set @ErrorPosition=262
+Set @ErrorMessage='Pharmacy iQemo'
+
+IF OBJECT_ID(N'BH_RESEARCH.dbo.RDE_iQEMO', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.dbo.RDE_iQEMO
+SELECT DEM.PERSON_ID, PT.[PrimaryIdentifier] AS MRN
+      ,PT.[NHSNumber] AS NHS_Number, TC.TreatmentCycleID, TC.PrescribedDate, TemplateName, RG.Name, RG.DefaultCycles, RG.ChemoRadiation, RG.OPCSProcurementCode, RG.OPCSDeliveryCode, RG.SactName, RG.Indication
+	  INTO BH_RESEARCH.dbo.RDE_iQEMO
+	  FROM [IQEMO].[iQemo].[dbo].[TreatmentCycle] TC
+LEFT JOIN [IQEMO].[iQemo].[dbo].[ChemotherapyCourse] CC ON (CC.ChemoTherapyCourseID = TC.ChemoTherapyCourseID)
+LEFT JOIN [IQEMO].[iQemo].[dbo].[Regimen] RG ON (CC.RegimenID = RG.RegimenID)
+LEFT JOIN [IQEMO].[iQemo].[dbo].[Patient] PT ON TC.PatientID = PT.PatientID
+LEFT JOIN [BH_RESEARCH].[dbo].RDE_Patient_Demographics DEM  ON (PT.[PrimaryIdentifier] = DEM.MRN)
+WHERE TC.PrescribedDate IS NOT NULL
+AND PERSON_ID IS NOT NULL
+
+
+SELECT @Row_Count=@@ROWCOUNT
+
+CREATE INDEX indx_iqemo ON  BH_RESEARCH.dbo.RDE_iQEMO (NHS_Number)
+
+SET @ErrorPosition=280
+SET @ErrorMessage='Pharmacy details inserted into Temptable'
+
+SELECT	@EndDate = GETDATE();
+SELECT @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
+            + CAST( DATEPART(MINUTE, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  MINS '
+            + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
+
+INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
+			VALUES (@Extract_id,'iQemo', @StartDate, @EndDate,@time,@Row_Count)
+
   END
+
+
 
 
 --------------------------------------------------------------------------------------------------------
@@ -1044,23 +1253,25 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=290
 Set @ErrorMessage='Power Forms'
 
-IF OBJECT_ID(N'RDE_Powerforms', N'U') IS NOT NULL DROP TABLE RDE_Powerforms
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_Powerforms', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_Powerforms
 	
-	CREATE TABLE RDE_Powerforms 
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_Powerforms 
         (NHS_Number			VARCHAR(10)
 		,MRN				VARCHAR(20)
 		,ENCNTR_ID			VARCHAR(20)
 		,[PerformDate]		VARCHAR(16)
 		,DOC_RESPONSE_KEY	VARCHAR(50)
 		,[Form]				VARCHAR(300)
-		--,[FormDef]			VARCHAR(300)
+		,[FormID]			BIGINT
 		,[Section]			VARCHAR(350)
-		--,[SectionDef]		VARCHAR(350)
-		--,[ElementDesc]		VARCHAR(300)
+		,[SectionID]		BIGINT
 		,[Element]			VARCHAR(300)
-		--,[ComponentDesc]	VARCHAR(300)
+		,[ElementID]		BIGINT
 		,[Component]		VARCHAR(300)
+		,[ComponentDesc]	VARCHAR(300)
+		,[ComponentID]		BIGINT
 		,[Response]			VARCHAR(350)
+		,[ResponseNumeric]	BIT
         ,[Status]			VARCHAR(100))
 
 
@@ -1072,7 +1283,7 @@ IF @PowerForms=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_Powerforms
+     INSERT INTO  BH_RESEARCH.DBO.RDE_Powerforms
          SELECT  
     
 	        ENC.NHS_Number															AS NHS_Number
@@ -1081,20 +1292,20 @@ IF @PowerForms=1
 	        ,CONVERT(VARCHAR(16),[PERFORMED_DT_TM],120)							AS [PerformDate]
 			,DOC.DOC_RESPONSE_KEY
 	        ,dbo.csvString(Dref.FORM_DESC_TXT)													AS [Form]
-	        --,Dref.FORM_DEFINITION_TXT											AS [FormDef]
+	        ,DOC.FORM_EVENT_ID															AS [FormID]
 	        ,dbo.csvString(Dref.SECTION_DESC_TXT)											    AS [Section]
-	        --,Dref.SECTION_DEF_TXT												AS [SectionDef]
-	        --,Dref.ELEMENT_DESC_TXT												AS [ElementDesc]
+			,DOC.SECTION_EVENT_ID														AS [SectionID]
 	        ,dbo.csvString(Dref.ELEMENT_LABEL_TXT)												AS [Element]
-	        --,Dref.ELEMENT_MNEMONIC_TXT                     
-            --,Dref.GRID_NAME_TXT													AS [ComponentDesc]
+			,DOC.ELEMENT_EVENT_ID														AS [ElementID]
 	        ,dbo.csvString(Dref.GRID_COLUMN_DESC_TXT)											AS [Component]
-			--,dref.GRID_COLUMN_MNEMONIC_TXT
+			,DREF.GRID_NAME_TXT															AS [ComponentDesc]
+	        ,DOC.GRID_EVENT_ID															AS [ComponentID]
 	        ,dbo.csvString([RESPONSE_VALUE_TXT])												AS [Response]
+			,CASE WHEN ISNUMERIC([RESPONSE_VALUE_TXT]) <> 1 THEN 0 ELSE 1 END					AS [ResponseNumeric]
 	        ,dbo.csvString(Cref.CODE_DESC_TXT)													AS [Status]
 	  	 
      FROM [BH_DATAWAREHOUSE].[dbo].[PI_CDE_DOC_RESPONSE]DOC  with (nolock)
-             INNER JOIN RDE_Encounter Enc
+             INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter Enc
                   ON Enc.ENCNTR_ID=doc.ENCNTR_ID
              LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo]. PI_LKP_CDE_DOC_REF Dref with (nolock)
 		          ON DOC.DOC_INPUT_ID = Dref.DOC_INPUT_KEY
@@ -1104,7 +1315,7 @@ IF @PowerForms=1
 
 SELECT @Row_Count=@@ROWCOUNT
 
-CREATE INDEX indx_PF ON RDE_Powerforms (NHS_Number)	
+CREATE INDEX indx_PF ON  BH_RESEARCH.DBO.RDE_Powerforms (NHS_Number)	
  
 SET @ErrorPosition=310
 SET @ErrorMessage='PowerForms details inserted into Temptable'
@@ -1130,9 +1341,9 @@ SET @ErrorMessage='Radiology'
 
 --SELECT * INTO Tbl_NHSI_Exam_Mapping  FROM [BH_IMAGING].[CSS_BI].[Tbl_NHSI_Exam_Mapping]
 
-IF OBJECT_ID(N'RDE_Radiology', N'U') IS NOT NULL DROP TABLE RDE_Radiology
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_Radiology', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_Radiology
     
-	CREATE TABLE RDE_Radiology (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_Radiology (
 	    --ORDER_ID				VARCHAR(30)
 		PERSON_ID				VARCHAR(30)
 		,MRN                    VARCHAR(20)
@@ -1144,6 +1355,7 @@ IF OBJECT_ID(N'RDE_Radiology', N'U') IS NOT NULL DROP TABLE RDE_Radiology
 		,ExamName				VARCHAR(550)
 		,EventName				VARCHAR(500)
 		,EVENT_TAG_TXT			VARCHAR(500)
+		,ResultNumeric			BIT
 		,ExamStart				VARCHAR(16)
 		,ExamEnd				VARCHAR(16)
 		--,EVENT_TITLE_TXT		VARCHAR(500)
@@ -1167,7 +1379,7 @@ IF @Radiology=1
   BEGIN
 
   SELECT @StartDate =GETDATE()
-      INSERT INTO RDE_Radiology
+      INSERT INTO  BH_RESEARCH.DBO.RDE_Radiology
 	     SELECT 
 	         --ORD.ORDER_ID
 	          EVE.PERSON_ID															AS PERSON_ID
@@ -1180,6 +1392,7 @@ IF @Radiology=1
 	         ,dbo.csvString(ORD.ORDER_MNEM_TXT)										AS ExamName
 	         ,dbo.csvString(CD.CODE_DESC_TXT)										AS EventName
 	         ,dbo.csvString(EVE.EVENT_TAG_TXT)
+			 ,CASE WHEN ISNUMERIC(EVE.EVENT_RESULT_TXT) <> 1 THEN 0 ELSE 1 END		AS ResultNumeric
 	         --,EVE.EVENT_TITLE_TXT
 	         ,CONVERT(VARCHAR(16),EVE.EVENT_START_DT_TM,120)						AS ExamStart
 	         ,CONVERT(VARCHAR(16),EVE.EVENT_END_DT_TM,120)							AS ExamEnd
@@ -1196,11 +1409,11 @@ IF @Radiology=1
 	         ,dbo.csvString(M.[ExaminationTypeName])
 			 ,EVE.EVENT_ID                                                          AS EventID
 	
-	   FROM TempOrder ORD with (nolock)
-	         INNER JOIN RDE_Encounter ENC
+	   FROM BH_RESEARCH.DBO.TempOrder ORD with (nolock)
+	         INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter ENC
 	              ON-- ORD.PERSON_ID=ENC.PERSON_ID AND 
 				  ORD.ENCNTR_ID=ENC.ENCNTR_ID
-	         INNER JOIN TempCE EVE with (nolock)
+	         INNER JOIN BH_RESEARCH.DBO.TEMPCE EVE with (nolock)
 	              ON ORD.ORDER_ID=EVE.ORDER_ID AND ORD.PERSON_ID=EVE.PERSON_ID AND EVE.CONTRIBUTOR_SYSTEM_CD='6141416' --Radiology data only
 	                --AND EVE.EVENT_CLASS_CD in (234,236)--e.EVENT_CLASS_CD in (224,223,234)  --234	Radiology
 	         LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] R with (nolock)
@@ -1215,7 +1428,7 @@ IF @Radiology=1
 	              ON EVE.EVENT_CD=CD.CODE_VALUE_CD
 	         LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] LO with (nolock)
 	              ON ORD.LAST_ORDER_STATUS_CD=LO.CODE_VALUE_CD
-	         LEFT OUTER JOIN TempBLOB B with (nolock)
+	         LEFT OUTER JOIN BH_RESEARCH.DBO.TempBLOB B with (nolock)
 	              ON EVE.EVENT_ID=B.EVENT_ID
              LEFT OUTER JOIN  [BH_RESEARCH].dbo.[Tbl_NHSI_Exam_Mapping] M with  (nolock)--EXAM CODE, MODALITY, SUB-MODALITY LOOK UP TABLE
 	              ON EVE.EVENT_TITLE_TXT=M.[ExaminationTypeName] OR EVE.EVENT_TAG_TXT=M.[ExaminationTypeName]
@@ -1223,7 +1436,7 @@ IF @Radiology=1
 
 SELECT @Row_Count=@@ROWCOUNT
 		  
-CREATE INDEX indx_Rdio ON RDE_Radiology (NHS_Number)	
+CREATE INDEX indx_Rdio ON  BH_RESEARCH.DBO.RDE_Radiology (NHS_Number)	
 	
 SET @ErrorPosition=320
 SET @ErrorMessage='Radiology details inserted into Temptable'
@@ -1236,16 +1449,16 @@ SELECT @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(1
 INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
 			VALUES (@Extract_id,'Radiology', @StartDate, @EndDate,@time,@Row_Count)
   END
---SELECT  * FROM RDE_Radiology
+--SELECT  * FROM  BH_RESEARCH.DBO.RDE_Radiology
 --------------------------------------------------------------------------------------------------------
 --FAMILY HISTORY
 --------------------------------------------------------------------------------------------------------
 Set @ErrorPosition=330
 Set @ErrorMessage='Family history'
 
-IF OBJECT_ID(N'RDE_FamilyHistory', N'U') IS NOT NULL DROP TABLE RDE_FamilyHistory
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_FamilyHistory', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_FamilyHistory
 
-   CREATE TABLE RDE_FamilyHistory (
+   CREATE TABLE  BH_RESEARCH.DBO.RDE_FamilyHistory (
        PERSON_ID			VARCHAR(14)
 	   ,MRN                 VARCHAR(20)
 	   ,NHS_Number			VARCHAR(14)
@@ -1272,7 +1485,7 @@ IF @FamilyHistory=1
 
    SELECT @StartDate =GETDATE()
 
-    INSERT INTO RDE_FamilyHistory
+    INSERT INTO  BH_RESEARCH.DBO.RDE_FamilyHistory
           SELECT 
              CONVERT(VARCHAR(14),F.[PERSON_ID])                              AS PERSON_ID
 			 ,E.MRN
@@ -1291,9 +1504,9 @@ IF @FamilyHistory=1
              ,CONVERT(VARCHAR(16),F.[SRC_BEG_EFFECT_DT_TM],120)              AS BegEffectDate
              ,CONVERT(VARCHAR(16),F.[SRC_END_EFFECT_DT_TM],120)              AS EndEffectDate
              ,CONVERT(VARCHAR(14),F.FHX_VALUE_FLG)                           AS FHX_VALUE_FLG
-	  --INTO RDE_FamilyHistory
+	  --INTO  BH_RESEARCH.DBO.RDE_FamilyHistory
      FROM [BH_DATAWAREHOUSE].[dbo].[PI_DIR_FAMILY_HISTORY_ACTIVITY]  F
-          INNER JOIN RDE_Encounter E
+          INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter E
                ON F.PERSON_ID=E.PERSON_ID 
           LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_PERSON_RELTN] REL
                ON F.RELATED_PERSON_ID=REL.RELATED_PERSON_ID
@@ -1311,7 +1524,7 @@ IF @FamilyHistory=1
 
 Select @Row_Count=@@ROWCOUNT
 
-  CREATE INDEX indx_FHist ON RDE_FamilyHistory (NHS_Number)
+  CREATE INDEX indx_FHist ON  BH_RESEARCH.DBO.RDE_FamilyHistory (NHS_Number)
 
 Set @ErrorPosition=350
 Set @ErrorMessage='Family history details inserted into Temptable'
@@ -1331,8 +1544,8 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=360
 Set @ErrorMessage='Blob data'
 
-IF OBJECT_ID(N'RDE_BLOBDataset', N'U') IS NOT NULL DROP TABLE RDE_BLOBDataset
-   CREATE TABLE RDE_BLOBDataset (
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_BLOBDataset', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_BLOBDataset
+   CREATE TABLE  BH_RESEARCH.DBO.RDE_BLOBDataset (
          NHS_Number			VARCHAR(14)
 		,MRN				VARCHAR(20)
 		,ClinicalSignificantDate VARCHAR(16)
@@ -1360,7 +1573,7 @@ IF @BLOBdata=1
      
 	 SELECT @StartDate =GETDATE()
 
-	    INSERT INTO RDE_BLOBDataset
+	    INSERT INTO  BH_RESEARCH.DBO.RDE_BLOBDataset
   
           SELECT 
 	        CONVERT(VARCHAR(14),E.NHS_Number)                                          AS NHS_Number
@@ -1381,14 +1594,14 @@ IF @BLOBdata=1
 	        ,CONVERT(VARCHAR(20),dbo.csvString(EvntCls.CODE_DESC_TXT))                                AS ClassDesc
 	        ,CONVERT(VARCHAR(20),CE.PARENT_EVENT_ID)                                   AS ParentEventID
 	        --,CONVERT(VARCHAR(20),CE.EVENT_ID)                                          AS ChildEventID
-    FROM TempBLOB B WITH(NOLOCK)
-            INNER JOIN TempCE CE WITH(NOLOCK)
+    FROM BH_RESEARCH.DBO.TempBLOB B WITH(NOLOCK)
+            INNER JOIN BH_RESEARCH.DBO.TEMPCE CE WITH(NOLOCK)
                  ON B.EVENT_ID = CE.EVENT_ID
-            INNER JOIN RDE_Encounter E WITH(NOLOCK) 
+            INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter E WITH(NOLOCK) 
                  ON  CE.ENCNTR_ID=E.ENCNTR_ID
 	        LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo]. [PI_LKP_CDE_CODE_VALUE_REF] EvntCls with (nolock)
 	             ON ce.EVENT_CLASS_CD = EvntCls.CODE_VALUE_CD	 
-	        LEFT OUTER JOIN TempCE CE2  with (nolock)
+	        LEFT OUTER JOIN BH_RESEARCH.DBO.TempCE  CE2  with (nolock)
 	             ON CE.PARENT_EVENT_ID = CE2.EVENT_ID
 		    LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo]. [PI_LKP_CDE_CODE_VALUE_REF] Evntcd with (nolock)
 		         ON CE.EVENT_CD = Evntcd.CODE_VALUE_CD
@@ -1407,7 +1620,7 @@ IF @BLOBdata=1
 Select @Row_Count=@@ROWCOUNT
 
 
-CREATE INDEX indx_BLOB ON RDE_BLOBDataset (NHS_Number)
+CREATE INDEX indx_BLOB ON  BH_RESEARCH.DBO.RDE_BLOBDataset (NHS_Number)
 
 Set @ErrorPosition=380
 Set @ErrorMessage='Blob data is inserted into Temptable'
@@ -1426,8 +1639,8 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=390
 Set @ErrorMessage='PC PROCEDURES'
 
-IF OBJECT_ID(N'RDE_PC_PROCEDURES', N'U') IS NOT NULL DROP TABLE RDE_PC_PROCEDURES
-   CREATE TABLE RDE_PC_PROCEDURES (
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_PC_PROCEDURES', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_PC_PROCEDURES
+   CREATE TABLE  BH_RESEARCH.DBO.RDE_PC_PROCEDURES (
         MRN				VARCHAR(14)
 		,NHS_Number		VARCHAR(14)
 		,AdmissionDT	VARCHAR(16)
@@ -1451,7 +1664,7 @@ IF @PCProcedures=1
 
    SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_PC_PROCEDURES
+     INSERT INTO  BH_RESEARCH.DBO.RDE_PC_PROCEDURES
 	   SELECT  
            E.MRN                                                         		AS MRN
            ,E.NHS_Number                                                         AS NHS_Number
@@ -1469,14 +1682,14 @@ IF @PCProcedures=1
 	       ,CONVERT(VARCHAR(1000),dbo.csvString(PCPROC.Comment))                               AS Comment
  
        FROM [BH_DATAWAREHOUSE].[dbo].[PC_PROCEDURES] PCProc  with (nolock)
-       INNER JOIN RDE_Encounter E 
+       INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter E 
             ON PCproc.MRN=E.MRN --AND E.ENCNTR_ID=PCProc.Encounter_Id
        WHERE CAST(PCProc.Proc_Dt_Tm AS DATE) >=@DATE
 	   ORDER BY AdmissionDT
 
 Select @Row_Count=@@ROWCOUNT
 
-CREATE INDEX indx_Proc ON RDE_PC_PROCEDURES (NHS_Number)
+CREATE INDEX indx_Proc ON  BH_RESEARCH.DBO.RDE_PC_PROCEDURES (NHS_Number)
  
 Set @ErrorPosition=410
 Set @ErrorMessage='PCProcedures details is inserted into Temptable'
@@ -1495,9 +1708,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=420
 Set @ErrorMessage='PC Diagnosis'
 
-IF OBJECT_ID(N'RDE_PC_DIAGNOSIS', N'U') IS NOT NULL DROP TABLE RDE_PC_DIAGNOSIS
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_PC_DIAGNOSIS', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_PC_DIAGNOSIS
 
-    CREATE TABLE RDE_PC_DIAGNOSIS (
+    CREATE TABLE  BH_RESEARCH.DBO.RDE_PC_DIAGNOSIS (
         DiagID			VARCHAR(15)
 		,Person_ID		VARCHAR(20)
 		,NHS_Number		VARCHAR(20)
@@ -1522,7 +1735,7 @@ IF @PCDiagnosis =1
 
    SELECT @StartDate =GETDATE()
 
-    INSERT INTO RDE_PC_DIAGNOSIS
+    INSERT INTO  BH_RESEARCH.DBO.RDE_PC_DIAGNOSIS
           SELECT 
               CONVERT(VARCHAR(15),[Diagnosis_Id])								AS DiagID
              ,CONVERT(VARCHAR(20),PR.[Person_Id])								AS Person_ID
@@ -1542,7 +1755,7 @@ IF @PCDiagnosis =1
 	
      
   FROM [BH_DATAWAREHOUSE].[dbo].[PC_DIAGNOSES] PR
-        INNER JOIN RDE_Encounter E
+        INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter E
             ON PR.PERSON_ID=E.PERSON_ID AND PR.Encounter_Id=E.ENCNTR_ID 
 		WHERE CAST(PR.Diag_Dt AS DATE)>=@DATE
 		ORDER BY DiagDt
@@ -1555,7 +1768,7 @@ Select @Row_Count=@@ROWCOUNT
 ------------------------------------------------------------------------------------------
 
 
-CREATE INDEX indx_Diag ON RDE_PC_DIAGNOSIS (NHS_Number)
+CREATE INDEX indx_Diag ON  BH_RESEARCH.DBO.RDE_PC_DIAGNOSIS (NHS_Number)
 
 Set @ErrorPosition=440
 Set @ErrorMessage='PC diagnosis details inserted into Temptable'
@@ -1574,9 +1787,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=450
 Set @ErrorMessage='PC Problems'
 
- IF OBJECT_ID(N'RDE_PC_PROBLEMS', N'U') IS NOT NULL DROP TABLE RDE_PC_PROBLEMS
+ IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_PC_PROBLEMS', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_PC_PROBLEMS
 
-	CREATE TABLE RDE_PC_PROBLEMS (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_PC_PROBLEMS (
 		ProbID				VARCHAR(14)
 		,Person_ID			VARCHAR(14)
 		,MRN				VARCHAR(20)
@@ -1602,7 +1815,7 @@ IF @PCProblems =1
 
    SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_PC_PROBLEMS
+     INSERT INTO  BH_RESEARCH.DBO.RDE_PC_PROBLEMS
         SELECT  
              CONVERT(VARCHAR(14), [Problem_Id])								   AS ProbID
 			,CONVERT(VARCHAR(14),PCP.[Person_Id])							   AS Person_ID
@@ -1625,14 +1838,14 @@ IF @PCProblems =1
 
   FROM [BH_DATAWAREHOUSE].[dbo].[PC_PROBLEMS] pcp WITH (NOLOCK)
 
-        INNER JOIN RDE_Encounter E
+        INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter E
           ON PCP.MRN=E.MRN AND PCP.Person_Id=E.PERSON_ID
 	WHERE CAST(PCP.Onset_Date AS DATE)>=@DATE
 	ORDER BY OnsetDate
 
 Select @Row_Count=@@ROWCOUNT
 
-CREATE INDEX indx_Prob ON RDE_PC_PROBLEMS (NHS_Number)
+CREATE INDEX indx_Prob ON  BH_RESEARCH.DBO.RDE_PC_PROBLEMS (NHS_Number)
 
 
 Set @ErrorPosition=470
@@ -1657,9 +1870,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=480
 Set @ErrorMessage='MSDS MotherBooking'
 
-IF OBJECT_ID(N'RDE_MSDS_Booking', N'U') IS NOT NULL DROP TABLE RDE_MSDS_Booking
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_MSDS_Booking', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_MSDS_Booking
 
-	CREATE TABLE RDE_MSDS_Booking (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_MSDS_Booking (
 		Person_ID								VARCHAR(14)
 		,PregnancyID							    VARCHAR(14)
 		,MRN								    VARCHAR(14)
@@ -1708,7 +1921,7 @@ BEGIN
 
 SELECT @StartDate =GETDATE()
 
-   INSERT INTO RDE_MSDS_Booking
+   INSERT INTO  BH_RESEARCH.DBO.RDE_MSDS_Booking
        SELECT DISTINCT
 	       CONVERT(VARCHAR(14),PREG.PERSON_ID)                               AS Person_ID 
           ,CONVERT(VARCHAR(14),PREG.PREGNANCY_ID)                               AS PregnancyID 
@@ -1720,7 +1933,7 @@ SELECT @StartDate =GETDATE()
 		  ,CONVERT(VARCHAR(1000),dbo.csvString(PREG.SMOKING_STATUS_DEL_DESC))                    AS SmokingStatusDelivery
 		  ,CONVERT(VARCHAR(1000),dbo.csvString(PREG.REC_SUB_USE_DESC))                           AS SubstanceUse
 		  ,CONVERT(VARCHAR(16),PREG.ROM_DT_TM,120)								AS DeliveryDate
-		  ,(SELECT TOP(1) Postcode_TXT FROM[BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_ADDRESS] AS ADDR WHERE ADDR.PERSON_ID = DEM.PERSON_ID) AS PostCode
+		  ,(SELECT TOP(1) Postcode_TXT FROM [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_ADDRESS] AS ADDR WHERE ADDR.PERSON_ID = DEM.PERSON_ID) AS PostCode
 		  ,PREG.HT_BOOKING_CM													AS Height_CM
 		  ,PREG.WT_BOOKING_KG													AS Weight_KG
 		  ,PREG.BMI_BOOKING_DESC												AS BMI
@@ -1759,7 +1972,7 @@ SELECT @StartDate =GETDATE()
 
 Select @Row_Count=@@ROWCOUNT
 
-CREATE INDEX indx_MB ON RDE_MSDS_Booking (NHS_Number)
+CREATE INDEX indx_MB ON  BH_RESEARCH.DBO.RDE_MSDS_Booking (NHS_Number)
   
 Set @ErrorPosition=500
 Set @ErrorMessage='Pregnancy booking details inserted into Temptable'
@@ -1772,9 +1985,9 @@ Set @ErrorMessage='Pregnancy booking details inserted into Temptable'
 Set @ErrorPosition=510
 Set @ErrorMessage='MSDS Care contact'
 
-IF OBJECT_ID(N'RDE_MSDS_CareContact', N'U') IS NOT NULL DROP TABLE RDE_MSDS_CareContact
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_MSDS_CareContact', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_MSDS_CareContact
 
-	CREATE TABLE RDE_MSDS_CareContact 
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_MSDS_CareContact 
 		(NHS_Number			VARCHAR(14)
 		,MRN       		    VARCHAR(14)
 		,PregnancyID		VARCHAR(14)
@@ -1796,7 +2009,7 @@ Set @ErrorMessage='MSDS Care contact temp table created'
 
 
 
-    INSERT INTO RDE_MSDS_CareContact
+    INSERT INTO  BH_RESEARCH.DBO.RDE_MSDS_CareContact
        SELECT 
          CONVERT(VARCHAR(14),  MB.NHS_Number)                                   AS NHS_Number
 		,MB.MRN																   AS MRN
@@ -1814,13 +2027,13 @@ Set @ErrorMessage='MSDS Care contact temp table created'
         ,CONVERT(VARCHAR(16),CON.[CANCELDATE],120)                             AS CancelDate
         ,CONVERT(VARCHAR(16),CON.[REPLAPPTOFFDATE],120)                        AS RepAppOffDate
      
- FROM  [BH_DATAWAREHOUSE].[dbo].[MSD201CARECONTACTPREG] CON with (nolock)      --JOIN TO  RDE_MSDS_Booking1 INSTEAD OF THESE TWO
-           INNER JOIN RDE_MSDS_Booking MB
+ FROM  [BH_DATAWAREHOUSE].[dbo].[MSD201CARECONTACTPREG] CON with (nolock)      --JOIN TO   BH_RESEARCH.DBO.RDE_MSDS_Booking1 INSTEAD OF THESE TWO
+           INNER JOIN  BH_RESEARCH.DBO.RDE_MSDS_Booking MB
              ON MB.PREGNANCYID=CON.PREGNANCYID
 
 Select @Row_Count=@Row_Count+@@ROWCOUNT
 
-CREATE INDEX indx_CC ON RDE_MSDS_CareContact (NHS_Number)
+CREATE INDEX indx_CC ON  BH_RESEARCH.DBO.RDE_MSDS_CareContact (NHS_Number)
 
 
 Set @ErrorPosition=530
@@ -1833,9 +2046,9 @@ Set @ErrorMessage='Care contact details inserted into Temptable'
 Set @ErrorPosition=540
 Set @ErrorMessage='MSDS Delivery'
 
-IF OBJECT_ID(N'RDE_MSDS_Delivery', N'U') IS NOT NULL DROP TABLE RDE_MSDS_Delivery
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_MSDS_Delivery', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_MSDS_Delivery
 
-	CREATE TABLE RDE_MSDS_Delivery (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_MSDS_Delivery (
 		Person_ID					VARCHAR(14)
 		,PregnancyID				VARCHAR(14)
 		,NHS_Number					VARCHAR(14)
@@ -1888,7 +2101,7 @@ Set @ErrorPosition=550
 Set @ErrorMessage='MSDS Delivery temp table created'
 
 
-INSERT INTO RDE_MSDS_Delivery
+INSERT INTO  BH_RESEARCH.DBO.RDE_MSDS_Delivery
   SELECT DISTINCT
   	       CONVERT(VARCHAR(14),MOTHER.PERSON_ID)                        			AS Person_ID 
           ,CONVERT(VARCHAR(14),BIRTH.PREGNANCY_ID)                      			AS PregnancyID 
@@ -1949,7 +2162,7 @@ INSERT INTO RDE_MSDS_Delivery
 
 Select @Row_Count=@Row_Count+@@ROWCOUNT
 
-CREATE INDEX indx_Lab ON RDE_MSDS_Delivery (NHS_Number)
+CREATE INDEX indx_Lab ON  BH_RESEARCH.DBO.RDE_MSDS_Delivery (NHS_Number)
 
 Set @ErrorPosition=560
 Set @ErrorMessage='Delivery details inserted into Temptable'
@@ -1961,9 +2174,9 @@ Set @ErrorMessage='Delivery details inserted into Temptable'
 Set @ErrorPosition=570
 Set @ErrorMessage='MSDS Diagnosis'
 
-IF OBJECT_ID(N'RDE_MSDS_Diagnosis', N'U') IS NOT NULL DROP TABLE RDE_MSDS_Diagnosis
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_MSDS_Diagnosis', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_MSDS_Diagnosis
 
-	CREATE TABLE RDE_MSDS_Diagnosis (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_MSDS_Diagnosis (
 		NHS_Number			VARCHAR(14)
 		,MRN                VARCHAR(14)
 		,DiagPregID			VARCHAR(14)
@@ -1980,7 +2193,7 @@ Set @ErrorPosition=580
 Set @ErrorMessage='MSDS Diagnosis temp table created'
 
 
-INSERT INTO RDE_MSDS_Diagnosis
+INSERT INTO  BH_RESEARCH.DBO.RDE_MSDS_Diagnosis
       SELECT 
           CONVERT(VARCHAR(14),PREG.NHS_Number)                                 AS NHS_Number
 		 ,PREG.MRN
@@ -1994,7 +2207,7 @@ INSERT INTO RDE_MSDS_Diagnosis
          ,CONVERT(VARCHAR(14),S.SNOMED_CD )                                   AS SnomedCD
 		 ,CONVERT(VARCHAR(2000),dbo.csvString(S.[SOURCE_STRING]) )                             AS DiagDesc
   FROM [BH_DATAWAREHOUSE].[dbo].[MSD106DIAGNOSISPREG] Diag with (nolock)
-	     INNER JOIN RDE_MSDS_Booking PREG with (nolock)
+	     INNER JOIN  BH_RESEARCH.DBO.RDE_MSDS_Booking PREG with (nolock)
              ON PREG.PREGNANCYID=Diag.PREGNANCYID
          LEFT OUTER JOIN  (SELECT *, ROW_NUMBER() OVER ( PARTITION BY SNOMED_CD ORDER BY[UPDT_DT_TM] DESC ) LastUpdt
                            FROM  [BH_DATAWAREHOUSE].[dbo].[LKP_MILL_DIR_SNOMED] )S
@@ -2003,7 +2216,7 @@ INSERT INTO RDE_MSDS_Diagnosis
 
 Select @Row_Count=@Row_Count+@@ROWCOUNT
 
-CREATE INDEX indx_MSD ON RDE_MSDS_Diagnosis (NHS_Number) 
+CREATE INDEX indx_MSD ON  BH_RESEARCH.DBO.RDE_MSDS_Diagnosis (NHS_Number) 
 
 Set @ErrorPosition=590
 Set @ErrorMessage='MSDS Diagnosis details inserted into Temptable'
@@ -2014,8 +2227,469 @@ select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(1
             + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
 
 INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
-			VALUES (@Extract_id,'MSDS', @StartDate, @EndDate,@time,@Row_Count)     
-	END
+			VALUES (@Extract_id,'MSDS', @StartDate, @EndDate,@time,@Row_Count)    
+
+
+
+--------------------------------------------------------------------------------------------------------
+ -- NEW MATERNITY TABLES
+----------------------------------------------------------------------------------
+
+/****** [BadgerNetReporting].[bnf_dbsync].[NNURoutineExamination] NNUExam  ******/
+
+Set @ErrorPosition=595
+Set @ErrorMessage='Badgernet Exam'
+
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_MAT_NNU_Exam', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_MAT_NNU_Exam
+
+SELECT PDEM.Person_ID,
+	  PDEM.MRN,
+      (NIE.nationalid) AS NHS_Number
+      ,coalesce([DateOfExamination], [RecordTimestamp]) AS ExamDate
+      ,[HeadCircumference]
+      ,[Skin]
+      ,[SkinComments]
+      ,[Cranium]
+      ,[CraniumComments]
+      ,[Fontanelle]
+      ,[FontanelleComments]
+      ,[Sutures]
+      ,[SuturesComments]
+      ,[RedReflex]
+      ,[RedReflexComments]
+      ,[RedReflexRight]
+      ,[RedReflexCommentsRight]
+      ,[Ears]
+      ,[EarsComments]
+      ,[PalateSuck]
+      ,[PalateSuckComments]
+      ,[Spine]
+      ,[SpineComments]
+      ,[Breath]
+      ,[BreathComments]
+      ,[Heart]
+      ,[HeartComments]
+      ,[Femoral]
+      ,[FemoralComments]
+      ,[FemoralRight]
+      ,[FemoralCommentsRight]
+      ,[Abdomen]
+      ,[AbdomenComments]
+      ,[Genitalia]
+      ,[GenitaliaComments]
+      ,[Testicles]
+      ,[TesticlesComments]
+      ,[Anus]
+      ,[AnusComments]
+      ,[Hands]
+      ,[HandsComments]
+      ,[Feet]
+      ,[FeetComments]
+      ,[Hips]
+      ,[HipsComments]
+      ,[HipsRight]
+      ,[HipRightComments]
+      ,[Tone]
+      ,[ToneComments]
+      ,[Movement]
+      ,[MovementComments]
+      ,[Moro]
+      ,[MoroComments]
+      ,[Overall]
+      ,[OverallComments]
+      ,[NameOfExaminer]
+      ,[Palate]
+      ,[PalateComments]
+      ,[SuckingReflex]
+      ,[SuckingReflexComments]
+      ,[EarsLeft]
+      ,[EarsCommentsLeft]
+      ,[EarsRight]
+      ,[EarsCommentsRight]
+      ,[Eyes]
+      ,[EyesComments]
+      ,[Chest_NZ]
+      ,[ChestComments_NZ]
+      ,[Mouth_NZ]
+      ,[MouthComments_NZ]
+      ,[Growth_NZ]
+      ,[GrowthComments_NZ]
+      ,[Grasp]
+      ,[GraspComments]
+      ,[Femorals_NZ]
+      ,[FemoralsComments_NZ]
+      ,[InguinalHernia]
+      ,[InguinalHerniaComments]
+      ,[GeneralComments]
+      ,[SyncScope]
+  INTO BH_RESEARCH.dbo.RDE_MAT_NNU_Exam
+  FROM [BadgerNetReporting].[bnf_dbsync].[NNURoutineExamination] NNUExam
+  LEFT JOIN [BadgerNetReporting].[dbo].[tblNationalIdEpIdx] NIE ON NIE.EntityID = NNUExam.entityid
+  LEFT JOIN [BH_RESEARCH].[dbo].[RDE_Patient_Demographics] PDEM
+  ON NIE.nationalid = PDEM.NHS_Number
+  WHERE PERSON_ID IS NOT NULL
+
+
+Select @Row_Count=@@ROWCOUNT
+
+CREATE INDEX indx_MSD ON  BH_RESEARCH.DBO.RDE_MAT_NNU_Exam (NHS_Number) 
+
+Set @ErrorPosition=590
+Set @ErrorMessage='Mat NNU Exam details inserted into Temptable'
+
+SELECT	@EndDate = GETDATE();
+select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
+            + CAST( DATEPART(MINUTE, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  MINS '
+            + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
+
+INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
+			VALUES (@Extract_id,'MAT NNU Exam', @StartDate, @EndDate,@time,@Row_Count)     
+
+
+
+
+
+
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_MAT_NNU_Episodes', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_MAT_NNU_Episodes
+
+
+
+/****** [BadgerNetReporting].[bnf_dbsync].[NNUEpisodes] ******/
+SELECT
+      PDEM.Person_ID,
+      [NationalIDBaby] AS NHS_Number
+      ,PDEM.MRN AS MRN
+      ,[CareLocationName]
+      ,[EpisodeType]
+      ,[Sex]
+      ,[BirthTimeBaby]
+      ,[GestationWeeks]
+      ,[GestationDays]
+      ,[Birthweight]
+      ,[BirthLength]
+      ,[BirthHeadCircumference]
+      ,[BirthOrder]
+      ,[FetusNumber]
+      ,[BirthSummary]
+      ,[EpisodeNumber]
+      ,[AdmitTime]
+      ,[AdmitFromName]
+      ,[AdmitFromNHSCode]
+      ,[ProviderName]
+      ,[ProviderNHSCode]
+      ,[NetworkName]
+      ,[AdmitTemperature]
+      ,[AdmitTemperatureTime]
+      ,[AdmitBloodPressure]
+      ,[AdmitHeartRate]
+      ,[AdmitRespiratoryRate]
+      ,[AdmitSaO2]
+      ,[AdmitBloodGlucose]
+      ,[AdmitWeight]
+      ,[AdmitHeadCircumference]
+      ,[DischTime]
+      ,[DischargeHospitalName]
+      ,[DischargeHospitalCode]
+      ,[DischargeWeight]
+      ,[DischargeHeadCircumference]
+      ,[DischargeMilk]
+      ,[DischargeFeeding]
+      ,[HomeTubeFeeding]
+      ,[DischargeOxygen]
+      ,[EpisodeSummary]
+      ,[VentilationDays]
+      ,[CPAPDays]
+      ,[OxygenDays]
+      ,[OxygenDaysNoVent]
+      ,[OxygenLastTime]
+      ,[ICCareDays]
+      ,[HDCareDays]
+      ,[SCCareDays]
+      ,[ICCareDays2011]
+      ,[HDCareDays2011]
+      ,[SCCareDays2011]
+      ,[NormalCareDays2011]
+      ,[HRG1]
+      ,[HRG2]
+      ,[HRG3]
+      ,[HRG4]
+      ,[HRG5]
+      ,[LocnNNUDays]
+      ,[LocnTCDays]
+      ,[LocnPNWDays]
+      ,[LocnOBSDays]
+      ,[LocnNNUPortion]
+      ,[LocnTCPoriton]
+      ,[LocnPNWPortion]
+      ,[DrugsDuringStay]
+      ,[DiagnosisDuringStay]
+      ,[NationalIDMother]
+      ,[BloodGroupMother]
+      ,[BirthDateMother]
+      ,[AgeMother]
+      ,[HepBMother]
+      ,[HepBMotherHighRisk]
+      ,[HivMother]
+      ,[RubellaScreenMother]
+      ,[SyphilisScreenMother]
+      ,[MumHCV]
+      ,[HepCPCRMother]
+      ,[MumVDRL]
+      ,[MumTPHA]
+      ,[MaternalPyrexiaInLabour38c]
+      ,[IntrapartumAntibioticsGiven]
+      ,[MeconiumStainedLiquor]
+      ,[MembraneRuptureDate]
+      ,[MembranerupturedDuration]
+      ,[ParentsConsanguinous]
+      ,[DrugsAbusedMother]
+      ,[SmokingMother]
+      ,[CigarettesMother]
+      ,[AlcoholMother]
+      ,[PreviousPregnanciesNumber]
+      ,[AgeFather]
+      ,[EthnicityFather]
+      ,[GestationWeeksCalculated]
+      ,[GestationDaysCalculated]
+      ,[BookingName]
+      ,[BookingNHSCode]
+      ,[SteroidsAntenatalGiven]
+      ,[SteroidsName]
+      ,[SteroidsAntenatalCourses]
+      ,[PlaceOfBirthName]
+      ,[PlaceOfBirthNHSCode]
+      ,[Apgar1]
+      ,[Apgar5]
+      ,[Apgar10]
+      ,[BabyBloodType]
+      ,[Crib2Score]
+      ,[FinalNNUOutcome]
+      ,[VitaminKGiven]
+      ,[CordArterialpH]
+      ,[CordVenouspH]
+      ,[CordPcO2Arterial]
+      ,[CordPcO2Venous]
+      ,[CordArterialBE]
+      ,[CordVenousBE]
+      ,[CordClamping]
+      ,[CordClampingTimeMinute]
+      ,[CordClampingTimeSecond]
+      ,[CordStripping]
+      ,[ResusSurfactant]
+      ,[Seizures]
+      ,[HIEGrade]
+      ,[Anticonvulsants]
+      ,[Pneumothorax]
+      ,[NecrotisingEnterocolitis]
+      ,[NeonatalAbstinence]
+      ,[ROPScreenDate]
+      ,[ROPSurgeryDate]
+      ,[Dexamethasone]
+      ,[PDAIndomethacin]
+      ,[PDAIbuprofen]
+      ,[PDASurgery]
+      ,[PDADischarge]
+      ,[UACTime]
+      ,[UVCTime]
+      ,[LongLineTime]
+      ,[PeripheralArterialLineTime]
+      ,[SurgicalLineTime]
+      ,[ParenteralNutritionDays]
+      ,[HeadScanFirstTime]
+      ,[HeadScanFirstResult]
+      ,[HeadScanLastTime]
+      ,[HeadScanLastResult]
+      ,[CongenitalAnomalies]
+      ,[VPShuntTime]
+      ,[BloodCultureFirstTime]
+      ,[BloodCultureFirstResult]
+      ,[CSFCultureFirstTime]
+      ,[CSFCultureFirstResult]
+      ,[UrineCultureFirstTime]
+      ,[UrineCultureFirstResult]
+      ,[ExchangeTransfusion]
+      ,[Tracheostomy]
+      ,[PulmonaryVasodilatorTime]
+      ,[PulmonaryVasodilatorDrugs]
+      ,[Inotropes]
+      ,[InotropesFirstTime]
+      ,[PeritonealDialysis]
+      ,[DischargeApnoeaCardioSat]
+      ,[gastroschisis]
+      ,[Cooled]
+      ,[FirstConsultationWithParents]
+      ,[ReceivedMothersMilkDuringAdmission]
+      ,[DischargeLength]
+      ,[PrincipalDiagnosisAtDischarge]
+      ,[ActiveProblemsAtDischarge]
+      ,[PrincipleProceduresDuringStay]
+      ,[RespiratoryDiagnoses]
+      ,[CardiovascularDiagnoses]
+      ,[GastrointestinalDiagnoses]
+      ,[NeurologyDiagnoses]
+      ,[ROPDiagnosis]
+      ,[HaemDiagnoses]
+      ,[RenalDiagnoses]
+      ,[SkinDiagnoses]
+      ,[MetabolicDiagnoses]
+      ,[InfectionsDiagnoses]
+      ,[SocialIssues]
+      ,[DayOneLocationOfCare]
+      ,[BirthCareLocationName]
+      ,[UnitResponsibleFor2YearFollowUp]
+      ,[CordLactate]
+      ,[ROPScreenFirstDateDueStart]
+      ,[ROPScreenFirstDateDueEnd]
+      ,[ROPFirstScreenStart]
+      ,[ROPFirstScreenEnd]
+      ,[LSOA]
+      ,[DateOfFirstExamination]
+      ,[DateOfRoutineNeonatalExamination]
+      ,[MotherIntendToBreastFeed]
+      ,[MagnesiumSulphate]
+      ,[ReasonMagnesiumSulphateNotGiven]
+      ,[LabourWardDeath]
+      ,[AdmitPrincipalReason_Other]
+      ,[TwoYearFollowUpPerformedAnyEpisode]
+      ,[CauseOfDeath1A]
+      ,[CauseOfDeath1B]
+      ,[CauseOfDeath2]
+      ,[DateTimeLeftHospital]
+      ,[ReasonMagnesiumSulphateGiven]
+      ,[TwoYearFollowUpPerformedAnyEpisode_Date]
+      ,[MaternalMedicalNotes]
+      ,[AnomalyScanComments]
+      ,[ReceivedAntenatalCare]
+      ,[DateFirstUltrasound]
+      ,[FollowUp]
+      ,[timeReady]
+      ,[BabyAwaiting]
+      ,[TransferDestinationHospital]
+      ,[EPOCDischargeLetterSent]
+      ,[ParentEducationHandExpress]
+      ,[ParentEducationBreastPump]
+      ,[DischargeSummaryReferredToOutreachTeam]
+      ,[DischargeSummaryReferredToOutreachTeam_Date]
+      ,[NECDiagnosis]
+      ,[NECDiagBasedOn]
+      ,[clinicalFeatures]
+      ,[radiographicFeatures]
+      ,[FinalSummaryText]
+      ,[DateTimeOfDeath]
+      ,[SteroidsLastDose]
+      ,[WaterBirth]
+      ,[BCGImmunisationIndicated]
+      ,[BCGGivenDuringStay]
+      ,[MotherFirstLanguage]
+      ,[MetabolicDiagnoses1]
+      ,[MaternalCoronaVirusAtBirth]
+      ,[EthnicityBaby]
+      ,[SyncScope]
+      ,[GestationWeeksCorrected_NowOrAtDisch]
+      ,[GestationDaysCorrected_NowOrAtDisch]
+  INTO BH_RESEARCH.dbo.RDE_MAT_NNU_Episodes
+  FROM [BadgerNetReporting].[bnf_dbsync].[NNUEpisodes] Nep
+  LEFT JOIN [BH_RESEARCH].[dbo].[RDE_Patient_Demographics] PDEM
+  ON Nep.NationalIDBaby = PDEM.NHS_Number
+  WHERE PERSON_ID IS NOT NULL
+
+Select @Row_Count=@@ROWCOUNT
+
+CREATE INDEX indx_MSD ON  BH_RESEARCH.DBO.RDE_MAT_NNU_Episodes (NHS_Number) 
+
+Set @ErrorPosition=592
+Set @ErrorMessage='Mat NNU Episode details inserted into Temptable'
+
+SELECT	@EndDate = GETDATE();
+select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
+            + CAST( DATEPART(MINUTE, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  MINS '
+            + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
+
+INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
+			VALUES (@Extract_id,'MAT NNU Episodes', @StartDate, @EndDate,@time,@Row_Count)     
+
+
+
+
+IF OBJECT_ID(N'BH_RESEARCH.dbo.RDE_MAT_NNU_NCCMDS', N'U') IS NOT NULL DROP TABLE BH_RESEARCH.dbo.RDE_MAT_NNU_NCCMDS
+
+
+
+/****** Script for SelectTopNRows command from SSMS  ******/
+SELECT 
+PDEM.Person_ID,
+      [NHSNumberBaby] AS NHS_Number
+      ,PDEM.MRN AS MRN
+      ,[WardLocation]
+      ,[DOB]
+      ,[CriticalCareStartDate]
+      ,[CriticalCareStartTime]
+      ,[CriticalCareDischargeDate]
+      ,[CriticalCareDischargeTime]
+      ,[Gestation]
+      ,[PersonWeight]
+      ,[CCAC1]
+      ,[CCAC2]
+      ,[CCAC3]
+      ,[CCAC4]
+      ,[CCAC5]
+      ,[CCAC6]
+      ,[CCAC7]
+      ,[CCAC8]
+      ,[CCAC9]
+      ,[CCAC10]
+      ,[CCAC11]
+      ,[CCAC12]
+      ,[CCAC13]
+      ,[CCAC14]
+      ,[CCAC15]
+      ,[CCAC16]
+      ,[CCAC17]
+      ,[CCAC18]
+      ,[CCAC19]
+      ,[CCAC20]
+      ,[HCDRUG1]
+      ,[HCDRUG2]
+      ,[HCDRUG3]
+      ,[HCDRUG4]
+      ,[HCDRUG5]
+      ,[HCDRUG6]
+      ,[HCDRUG7]
+      ,[HCDRUG8]
+      ,[HCDRUG9]
+      ,[HCDRUG10]
+      ,[HCDRUG11]
+      ,[HCDRUG12]
+      ,[HCDRUG13]
+      ,[HCDRUG14]
+      ,[HCDRUG15]
+      ,[HCDRUG16]
+      ,[HCDRUG17]
+      ,[HCDRUG18]
+      ,[HCDRUG19]
+      ,[HCDRUG20]
+	INTO BH_RESEARCH.dbo.RDE_MAT_NNU_NCCMDS
+	FROM [BadgerNetReporting].[bnf_dbsync].[NNU_NCCMDS] MDS
+    LEFT JOIN [BH_RESEARCH].[dbo].[RDE_Patient_Demographics] PDEM
+  ON MDS.NHSNumberBaby = PDEM.NHS_Number
+  WHERE PERSON_ID IS NOT NULL
+
+Select @Row_Count=@@ROWCOUNT
+
+CREATE INDEX indx_MSD ON  BH_RESEARCH.dbo.RDE_MAT_NNU_NCCMDS (NHS_Number) 
+
+Set @ErrorPosition=595
+Set @ErrorMessage='Mat NNU NCCMDS inserted into Temptable'
+
+SELECT	@EndDate = GETDATE();
+select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
+            + CAST( DATEPART(MINUTE, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  MINS '
+            + CAST( DATEPART(SECOND, @EndDate - @StartDate)        AS nvarchar(100)) + ' -  SECS'
+
+INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG] 
+			VALUES (@Extract_id,'MAT NNU NCCMDS', @StartDate, @EndDate,@time,@Row_Count)     
+
+END
 
 --------------------------------------------------------------------------------------------------------
  -- PHARMACY ORDER
@@ -2025,9 +2699,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 Set @ErrorPosition=600
 Set @ErrorMessage='Pharmacy Orders(Drugs)'
 
-IF OBJECT_ID(N'RDE_PharmacyOrders', N'U') IS NOT NULL DROP TABLE RDE_PharmacyOrders
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_PharmacyOrders', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_PharmacyOrders
 
-	CREATE TABLE RDE_PharmacyOrders (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_PharmacyOrders (
 		OrderID						VARCHAR(20)
 		,MRN                        VARCHAR(20)
 		,NHS_Number					VARCHAR(14)
@@ -2059,7 +2733,7 @@ BEGIN
 
 SELECT @StartDate =GETDATE()
 
-   INSERT INTO RDE_PharmacyOrders
+   INSERT INTO  BH_RESEARCH.DBO.RDE_PharmacyOrders
        SELECT 
         CONVERT(VARCHAR(20),O.ORDER_ID)                                        AS OrderID
 	   ,ENC.MRN
@@ -2084,9 +2758,9 @@ SELECT @StartDate =GETDATE()
        ,CONVERT(VARCHAR(16),[DISCONTINUE_DT_TM] ,120)                          AS DiscontinuedDT
        ,CONVERT(VARCHAR(50),[CONCEPT_CKI_IDENT])                               AS ConceptIdent
          
-  FROM TempOrder O
+  FROM BH_RESEARCH.DBO.TempOrder O
  
-        INNER JOIN RDE_Encounter ENC WITH (NOLOCK)
+        INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter ENC WITH (NOLOCK)
 		   ON O.ENCNTR_ID=ENC.ENCNTR_ID
 		   INNER JOIN BH_DATAWAREHOUSE.DBO.MILL_DIR_ORDER_TAILS T WITH (NOLOCK)
 		   ON T.ORDER_ID=O.ORDER_ID AND T.ORIGINATING_ENCNTR_ID=O.ENCNTR_ID
@@ -2110,7 +2784,7 @@ Select @Row_Count=@@ROWCOUNT
 
 
 
-CREATE INDEX indx_PO ON RDE_PharmacyOrders (NHS_Number) 
+CREATE INDEX indx_PO ON  BH_RESEARCH.DBO.RDE_PharmacyOrders (NHS_Number) 
 
 --705  Pharmacy
 --10577 Medications
@@ -2137,16 +2811,16 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 			VALUES (@Extract_id,'PharmacyOrders', @StartDate, @EndDate,@time,@Row_Count) 
 	END
 
-	--SELECT TOP 10* FROM RDE_PharmacyOrders
+	--SELECT TOP 10* FROM  BH_RESEARCH.DBO.RDE_PharmacyOrders
 --------------------------------------------------------------------------------------------------------
   --ALLERGY
 ---------------------------------------------------------------------------------------------------------
 Set @ErrorPosition=630
 Set @ErrorMessage='Allergy Details'
 
-IF OBJECT_ID(N'RDE_AllergyDetails', N'U') IS NOT NULL DROP TABLE RDE_AllergyDetails
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_AllergyDetails', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_AllergyDetails
 
-	CREATE TABLE RDE_AllergyDetails (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_AllergyDetails (
 		AllergyID			BIGINT
 		,NHS_Number			VARCHAR(14)
 		,MRN                VARCHAR(20)
@@ -2181,7 +2855,7 @@ BEGIN
 
 SELECT @StartDate=GETDATE()
 
-INSERT INTO RDE_AllergyDetails
+INSERT INTO  BH_RESEARCH.DBO.RDE_AllergyDetails
   SELECT 
         [ALLERGY_ID]                                                           AS AllergyID
 	  ,CONVERT(VARCHAR(14),ENC.NHS_Number)                                      AS NHS_Number
@@ -2208,7 +2882,7 @@ INSERT INTO RDE_AllergyDetails
       ,CONVERT(VARCHAR(50),dbo.csvString(Vocab.CODE_DESC_TXT))                                AS VocabDesc
       ,CONVERT(VARCHAR(50),dbo.csvString(Prec.CODE_DESC_TXT))                                 AS PrecisionDesc 
    FROM [BH_DATAWAREHOUSE].[dbo].[MILL_DIR_ALLERGY] A
-        INNER JOIN RDE_Encounter ENC 
+        INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter ENC 
 		   ON A.ENCNTR_ID=ENC.ENCNTR_ID AND A.PERSON_ID=ENC.PERSON_ID 
         LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] Stat
 		   ON CONVERT(VARCHAR(20), A.DATA_STATUS_CD) = Stat.CODE_VALUE_CD
@@ -2237,7 +2911,7 @@ INSERT INTO RDE_AllergyDetails
 Select @Row_Count=@@ROWCOUNT
 
 
-CREATE INDEX indx_Allergy ON RDE_AllergyDetails (NHS_Number) 
+CREATE INDEX indx_Allergy ON  BH_RESEARCH.DBO.RDE_AllergyDetails (NHS_Number) 
 
 Set @ErrorPosition=640
 Set @ErrorMessage='Allergy details inserted into Temptable'
@@ -2260,9 +2934,9 @@ Set @ErrorMessage='Somerset Cancer Registry'
 
 ------------Patient demographics from somerset table TO EXTRACT SCR patient_id
 
-IF OBJECT_ID(N'RDE_SCR_Demogrphics', N'U') IS NOT NULL DROP TABLE RDE_SCR_Demogrphics
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_Demogrphics', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_Demogrphics
 
-CREATE TABLE RDE_SCR_Demogrphics (
+CREATE TABLE  BH_RESEARCH.DBO.RDE_SCR_Demogrphics (
 	PATIENTID					VARCHAR(20)
 	,NHS_Number					VARCHAR(10)
     ,MRN						VARCHAR(20)
@@ -2276,9 +2950,9 @@ CREATE TABLE RDE_SCR_Demogrphics (
 ----------------------------------------------------------------------------------------------------------------
 --MAIN REFERRALS TABLE SCR
 ----------------------------------------------------------------------------------------------------------------
-IF OBJECT_ID(N'RDE_SCR_Referrals', N'U') IS NOT NULL DROP TABLE RDE_SCR_Referrals
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_Referrals', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_Referrals
 
-   CREATE TABLE RDE_SCR_Referrals (
+   CREATE TABLE  BH_RESEARCH.DBO.RDE_SCR_Referrals (
 		 CareID						 VARCHAR(10)
 		,MRN                        VARCHAR(20)
 		,NHS_Number					VARCHAR(10)
@@ -2329,9 +3003,9 @@ Set @ErrorPosition=660
 Set @ErrorMessage='Somerset Cancer Registry Referrals temp table created'
 
 
-IF OBJECT_ID(N'RDE_SCR_TrackingComments', N'U') IS NOT NULL DROP TABLE RDE_SCR_TrackingComments
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_TrackingComments', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_TrackingComments
   
-	CREATE TABLE RDE_SCR_TrackingComments (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_SCR_TrackingComments (
 	    MRN                         VARCHAR(20),
 		COM_ID						VARCHAR(10),
 		CareID						VARCHAR(10),
@@ -2349,9 +3023,9 @@ Set @ErrorMessage='SCR Tracking Comments Temptable created'
 ----------------------------------------------------------------------------------------------------------
 ----SCR Care plan details (Data accuracy less than 60% for this table)
 -----------------------------------------------------------------------------------------------------------
-IF OBJECT_ID(N'RDE_SCR_CarePlan', N'U') IS NOT NULL DROP TABLE RDE_SCR_CarePlan
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_CarePlan', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_CarePlan
 
-	CREATE TABLE RDE_SCR_CarePlan(
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_SCR_CarePlan(
 	    PlanID						VARCHAR(10),
 		MRN                         VARCHAR(20),
 		CareID						VARCHAR(10),
@@ -2378,9 +3052,9 @@ Set @ErrorMessage='SCR care plan Temptable created'
 ----SCR Definitive treatment details
 -----------------------------------------------------------------------------------------------------------
 
-IF OBJECT_ID(N'RDE_SCR_DefTreatment', N'U') IS NOT NULL DROP TABLE RDE_SCR_DefTreatment
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_DefTreatment', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_DefTreatment
 
-	CREATE TABLE RDE_SCR_DefTreatment(
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_SCR_DefTreatment(
 	    TreatmentID					VARCHAR(10),
 		MRN                         VARCHAR(20),
 		CareID						VARCHAR(10),
@@ -2408,9 +3082,9 @@ Set @ErrorMessage='SCR Treatment Temptable created'
 
 
 
-IF OBJECT_ID(N'RDE_SCR_Diagnosis', N'U') IS NOT NULL DROP TABLE RDE_SCR_Diagnosis
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_Diagnosis', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_Diagnosis
 
-	CREATE TABLE RDE_SCR_Diagnosis(
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_SCR_Diagnosis(
 	    CareID						VARCHAR(20),
 		MRN							VARCHAR(20),
 		CancerSite					VARCHAR(40),
@@ -2442,9 +3116,9 @@ Set @ErrorMessage='SCR Diagnosis Temptable created'
 ----SCR Definitive treatment details
 -----------------------------------------------------------------------------------------------------------
 
-IF OBJECT_ID(N'RDE_SCR_Investigations', N'U') IS NOT NULL DROP TABLE RDE_SCR_Investigations
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_Investigations', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_Investigations
 
-	CREATE TABLE RDE_SCR_Investigations(
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_SCR_Investigations(
 	    CareID						VARCHAR(20),
 		MRN                         VARCHAR(20),
 		CancerSite					VARCHAR(40),
@@ -2472,9 +3146,9 @@ Set @ErrorMessage='SCR Investigations Temptable created'
 -----------------------------------------------------------------------------------------------------------
 ----SCR Pathology  details (incomplete) complete details available in pathology tables
 -----------------------------------------------------------------------------------------------------------
-IF OBJECT_ID(N'RDE_SCR_Pathology', N'U') IS NOT NULL DROP TABLE RDE_SCR_Pathology
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_Pathology', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_Pathology
 
-	CREATE TABLE RDE_SCR_Pathology(
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_SCR_Pathology(
 	    PathologyID						VARCHAR(20),
 		MRN                             VARCHAR(20),
 		CareID							VARCHAR(40),
@@ -2504,9 +3178,9 @@ Set @ErrorMessage='SCR Pathology Temptable created'
 -----------------------------------------------------------------------------------------------------------
 
 
-IF OBJECT_ID(N'RDE_SCR_Imaging', N'U') IS NOT NULL DROP TABLE RDE_SCR_Imaging
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_Imaging', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_Imaging
 	
-	CREATE TABLE RDE_SCR_Imaging(
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_SCR_Imaging(
 	    ImageID							VARCHAR(20),
 		MRN                             VARCHAR(20),
 		CareID							VARCHAR(40),
@@ -2552,7 +3226,7 @@ Set @ErrorMessage='SCR Iamging Temptable created'
 IF @SCR=1
 	BEGIN
 
-IF OBJECT_ID(N'RDE_SCR_Demogrphics', N'U') IS NOT NULL DROP TABLE RDE_SCR_Demogrphics
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_SCR_Demogrphics', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_SCR_Demogrphics
 
     SELECT [PATIENT_ID] AS PATIENTID
       ,[N1_1_NHS_NUMBER] AS NHS_Number
@@ -2562,9 +3236,9 @@ IF OBJECT_ID(N'RDE_SCR_Demogrphics', N'U') IS NOT NULL DROP TABLE RDE_SCR_Demogr
       ,dbo.csvString([PT_AT_RISK]) AS PT_AT_RISK
       ,dbo.csvString([REASON_RISK]) AS REASON_RISK
 	  
-     INTO RDE_SCR_Demogrphics
+     INTO  BH_RESEARCH.DBO.RDE_SCR_Demogrphics
   FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblDEMOGRAPHICS] SCR WITH (NOLOCK)
-  INNER JOIN RDE_Patient_Demographics PAT  
+  INNER JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics PAT  
   ON --SCR.[N1_2_HOSPITAL_NUMBER]=PAT.MRN
   SCR.N1_1_NHS_NUMBER=PAT.NHS_Number
 
@@ -2577,7 +3251,7 @@ Set @ErrorMessage='Somerset Cancer Registry demographics temp table created'
 
 	SELECT @StartDate=GETDATE()
     
-INSERT INTO RDE_SCR_Referrals
+INSERT INTO  BH_RESEARCH.DBO.RDE_SCR_Referrals
     SELECT 
        CONVERT(VARCHAR(10),CARE_ID)                                                    AS CareID
 	  ,D.MRN
@@ -2626,7 +3300,7 @@ INSERT INTO RDE_SCR_Referrals
      
       
     FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_REFERRALS] REF WITH (NOLOCK)
-        INNER join  RDE_SCR_Demogrphics d
+        INNER join   BH_RESEARCH.DBO.RDE_SCR_Demogrphics d
 				ON REF.Patient_id=d.patientid
 		LEFT OUTER JOIN [SCR_NEW].[CancerRegisterMerged].[dbo].[ltblPRIORITY_TYPE] PT         --Priority type
 				ON REF.N2_4_PRIORITY_TYPE=PT.[PRIORITY_CODE]
@@ -2654,7 +3328,7 @@ Set @ErrorMessage='SCR Referrals data inserted into Temptable'
 -----------------------------------------------------------------------------------------------------------
 
 
-	INSERT INTO RDE_SCR_TrackingComments  
+	INSERT INTO  BH_RESEARCH.DBO.RDE_SCR_TrackingComments  
   SELECT 
        R.MRN 
 	  ,[COM_ID]										    AS COM_ID
@@ -2664,7 +3338,7 @@ Set @ErrorMessage='SCR Referrals data inserted into Temptable'
       ,dbo.csvString([COMMENTS])										AS Comments
      
   FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblTRACKING_COMMENTS] C 
-  inner JOIN RDE_SCR_Referrals R
+  inner JOIN  BH_RESEARCH.DBO.RDE_SCR_Referrals R
   ON C.CARE_ID=R.CareID 
 
 Select @Row_Count=@Row_Count+@@ROWCOUNT
@@ -2675,7 +3349,7 @@ Set @ErrorMessage='SCR Tracking Comments data inserted into Temptable'
 
 
 
-	INSERT INTO RDE_SCR_CarePlan
+	INSERT INTO  BH_RESEARCH.DBO.RDE_SCR_CarePlan
     SELECT 
 	   [PLAN_ID]												AS PlanID
 	  ,R.MRN
@@ -2695,7 +3369,7 @@ Set @ErrorMessage='SCR Tracking Comments data inserted into Temptable'
       ,dbo.csvString([L_NETWORK_COMMENTS])										AS NetworkComments
      
      FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_CARE_PLAN] CP WITH (NOLOCK)
-  INNER JOIN RDE_SCR_Referrals R
+  INNER JOIN  BH_RESEARCH.DBO.RDE_SCR_Referrals R
   ON CP.CARE_ID=R.CAREID 
 
 Select @Row_Count=@Row_Count+@@ROWCOUNT
@@ -2705,7 +3379,7 @@ Set @ErrorMessage='SCR care plan data inserted into Temptable'
 
 
 
-	INSERT INTO RDE_SCR_DefTreatment
+	INSERT INTO  BH_RESEARCH.DBO.RDE_SCR_DefTreatment
      SELECT 
 	  [TREATMENT_ID]									AS TreatmentID
 	  ,R.MRN
@@ -2731,7 +3405,7 @@ Set @ErrorMessage='SCR care plan data inserted into Temptable'
     
     
   FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblDEFINITIVE_TREATMENT] DT WITH (NOLOCK)
-   INNER JOIN RDE_SCR_Referrals R
+   INNER JOIN  BH_RESEARCH.DBO.RDE_SCR_Referrals R
   ON DT.CARE_ID=R.CAREID 
 
 Select @Row_Count=@Row_Count+@@ROWCOUNT
@@ -2746,7 +3420,7 @@ Set @ErrorMessage='SCR Treatment data inserted into Temptable'
 
 	
 
-INSERT INTO RDE_SCR_Diagnosis
+INSERT INTO  BH_RESEARCH.DBO.RDE_SCR_Diagnosis
 SELECT [CARE_ID]															AS CareID
       ,D.MRN
       ,[Cancer Site]														AS CancerSite
@@ -2771,7 +3445,7 @@ SELECT [CARE_ID]															AS CareID
       ,dbo.csvString([Primary Cancer Site])												AS PrimCancerSite
 
   FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[BIvwDiagnosis] diag WITH (NOLOCK)
-  join RDE_SCR_Demogrphics D
+  join  BH_RESEARCH.DBO.RDE_SCR_Demogrphics D
   on Diag.[NHS Number]=d.NHS_Number
 
 Select @Row_Count=@Row_Count+@@ROWCOUNT
@@ -2783,7 +3457,7 @@ Set @ErrorMessage='SCR Diagnosis data inserted into Temptable'
 
 
 
-	INSERT INTO RDE_SCR_Investigations  
+	INSERT INTO  BH_RESEARCH.DBO.RDE_SCR_Investigations  
 SELECT [CARE_ID]												AS CareID
       ,D.MRN
       ,[Cancer Site]											AS CancerSite
@@ -2804,7 +3478,7 @@ SELECT [CARE_ID]												AS CareID
       ,dbo.csvString([Staging Laparoscopy Performed])							AS StagingLaproscopyPerformed
     
   FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[BIvwInvestigations] inv
-  join RDE_SCR_Demogrphics D
+  join  BH_RESEARCH.DBO.RDE_SCR_Demogrphics D
   on inv.[NHS Number]=d.NHS_Number
 
 Select @Row_Count=@Row_Count+@@ROWCOUNT
@@ -2817,7 +3491,7 @@ Set @ErrorMessage='SCR Investigations data inserted into Temptable'
 
 
 
-	INSERT INTO RDE_SCR_Pathology
+	INSERT INTO  BH_RESEARCH.DBO.RDE_SCR_Pathology
 SELECT [PATHOLOGY_ID]								AS PathologyID
 	  ,R.MRN
       ,p.[CARE_ID]									AS CareID
@@ -2837,7 +3511,7 @@ SELECT [PATHOLOGY_ID]								AS PathologyID
       ,[SNOMEDDiagnosisID]							AS SNomedID
 	  	
   FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_PATHOLOGY] P WITH (NOLOCK)
-  join RDE_SCR_Referrals R
+  join  BH_RESEARCH.DBO.RDE_SCR_Referrals R
   on P.CARE_ID=R.CareID
   
   
@@ -2849,7 +3523,7 @@ Set @ErrorMessage='SCR Pathology data inserted into Temptable'
 
 
 	
-INSERT INTO RDE_SCR_Imaging
+INSERT INTO  BH_RESEARCH.DBO.RDE_SCR_Imaging
   SELECT [IMAGE_ID]									AS ImageID
       ,R.MRN
       ,i.[CARE_ID]									AS CareID
@@ -2867,7 +3541,7 @@ INSERT INTO RDE_SCR_Imaging
       ,[L_IMAGING_CODE]								AS ImageCD
       
   FROM [SCR_NEW].[CancerRegisterMerged].[dbo].[tblMAIN_IMAGING] I WITH (NOLOCK)
-  join RDE_SCR_Referrals R
+  join  BH_RESEARCH.DBO.RDE_SCR_Referrals R
   on I.CARE_ID=R.CareID
 
 
@@ -2895,9 +3569,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=700
 SET @ErrorMessage='Powertrials participation'
 
-IF OBJECT_ID(N'RDE_MILL_Powertrials', N'U') IS NOT NULL DROP TABLE RDE_MILL_Powertrials
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_MILL_Powertrials', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_MILL_Powertrials
 
-	CREATE TABLE RDE_MILL_Powertrials (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_MILL_Powertrials (
 		PERSONID							VARCHAR(14),
 		MRN									VARCHAR(20),
 		NHS_NUMBER							VARCHAR(20),
@@ -2920,7 +3594,7 @@ IF @PowertrialsPart=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_MILL_Powertrials
+     INSERT INTO  BH_RESEARCH.DBO.RDE_MILL_Powertrials
         SELECT DISTINCT * FROM (SELECT
 	CONVERT(VARCHAR(14),[RES].[PERSON_ID])                                     AS PERSONID,
 	CONVERT(VARCHAR(20), [PDEM].MRN)									AS MRN,
@@ -2948,7 +3622,7 @@ WHERE   x.rn = 1
 
 Select @Row_Count=@@ROWCOUNT
 
-ALTER TABLE RDE_MILL_Powertrials DROP COLUMN rn
+ALTER TABLE  BH_RESEARCH.DBO.RDE_MILL_Powertrials DROP COLUMN rn
 
 
 Set @ErrorPosition=720
@@ -2975,9 +3649,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=750
 SET @ErrorMessage='Aliases'
 
-IF OBJECT_ID(N'RDE_Aliases', N'U') IS NOT NULL DROP TABLE RDE_Aliases
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_Aliases', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_Aliases
 
-	CREATE TABLE RDE_Aliases (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_Aliases (
 		PERSONID							VARCHAR(14),
 		MRN									VARCHAR(20),
 		NHS_NUMBER							VARCHAR(20),
@@ -2994,18 +3668,18 @@ IF @Aliases=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_Aliases
+     INSERT INTO  BH_RESEARCH.DBO.RDE_Aliases
         SELECT 
 	CONVERT(VARCHAR(14),[PAT].[PERSON_ID])                                     AS PERSONID,
 	CONVERT(VARCHAR(20), [PAT].MRN)									AS MRN,
 	CONVERT(VARCHAR(20), [PAT].[NHS_Number])								AS NHS_Number,
 	CASE PERSON_ALIAS_TYPE_CD WHEN 18 THEN 'NHS_Number' WHEN 10 THEN 'MRN' ELSE NULL END AS CodeType,
-	CONVERT(VARCHAR(20), ALIAS_TXT) AS Code,
+	CONVERT(VARCHAR(20), ALIAS) AS Code,
 	CONVERT(VARCHAR(30), [AL].BEG_EFFECTIVE_DT_TM) AS IssueDate
-        FROM [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_ALIAS] AL
+        FROM [BH_DATAWAREHOUSE].[dbo].[MILL_DIR_PERSON_ALIAS] AL
 		LEFT JOIN [BH_RESEARCH].[dbo].[RDE_Patient_Demographics] PAT
 		ON CAST(AL.PERSON_ID AS VARCHAR) = CAST(PAT.PERSON_ID AS VARCHAR)
-        WHERE ALIAS_TXT != PAT.MRN AND ALIAS_TXT != PAT.NHS_Number 
+        WHERE ALIAS != PAT.MRN AND ALIAS != PAT.NHS_Number 
 		AND (PERSON_ALIAS_TYPE_CD = 18 OR PERSON_ALIAS_TYPE_CD = 10)
 
 Select @Row_Count=@@ROWCOUNT
@@ -3038,9 +3712,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=850
 SET @ErrorMessage='CritActivity'
 
-IF OBJECT_ID(N'RDE_CritActivity', N'U') IS NOT NULL DROP TABLE RDE_CritActivity
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_CritActivity', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_CritActivity
 
-	CREATE TABLE RDE_CritActivity (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_CritActivity (
 		PERSONID							VARCHAR(14),
 		MRN									VARCHAR(20),
 		NHS_NUMBER							VARCHAR(20),
@@ -3059,7 +3733,7 @@ IF @CritCare=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_CritActivity
+     INSERT INTO  BH_RESEARCH.DBO.RDE_CritActivity
         SELECT 
 	CONVERT(VARCHAR(14),[DEM].[PERSON_ID])                                     AS PERSONID,
 	CONVERT(VARCHAR(20), [DEM].MRN)									AS MRN,
@@ -3072,7 +3746,7 @@ IF @CritCare=1
  FROM [BH_DATAWAREHOUSE].[dbo].[CRIT_CARE_activity] a
 left join  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_NHS_DATA_DICT_REF] ref with (nolock) on a.Activity_Code = ref.NHS_DATA_DICT_NHS_CD_ALIAS
 AND ref.[NHS_DATA_DICT_ELEMENT_NAME_KEY_TXT]='CRITICALCAREACTIVITY'
-INNER JOIN RDE_Patient_Demographics DEM       
+INNER JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics DEM       
 ON DEM.MRN=a.mrn
 
 
@@ -3102,9 +3776,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=900
 SET @ErrorMessage='CritPeriod'
 
-IF OBJECT_ID(N'RDE_CritPeriod', N'U') IS NOT NULL DROP TABLE RDE_CritPeriod
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_CritPeriod', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_CritPeriod
 
-	CREATE TABLE RDE_CritPeriod (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_CritPeriod (
 		PERSONID							VARCHAR(14),
 		MRN									VARCHAR(20),
 		NHS_NUMBER							VARCHAR(20),
@@ -3135,7 +3809,7 @@ IF @CritCare=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_CritPeriod
+     INSERT INTO  BH_RESEARCH.DBO.RDE_CritPeriod
         SELECT 
 	CONVERT(VARCHAR(14),[DEM].[PERSON_ID])                                     AS PERSONID,
 	CONVERT(VARCHAR(20), [DEM].MRN)									AS MRN,
@@ -3162,7 +3836,7 @@ IF @CritCare=1
 FROM [BH_DATAWAREHOUSE].[dbo].[CRIT_CARE_period] a
 left join [BH_DATAWAREHOUSE].[dbo].[PI_LKP_NHS_DATA_DICT_REF] ref with (nolock) on a.CC_Disch_Dest_Cd = ref.NHS_DATA_DICT_NHS_CD_ALIAS
 AND ref.[NHS_DATA_DICT_ELEMENT_NAME_KEY_TXT]='CRITICALCAREDISCHDESTINATION'
-INNER JOIN RDE_Patient_Demographics DEM       
+INNER JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics DEM       
 ON DEM.MRN=a.mrn
 
 
@@ -3188,9 +3862,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=1000
 SET @ErrorMessage='CritOPCS'
 
-IF OBJECT_ID(N'RDE_CritOPCS', N'U') IS NOT NULL DROP TABLE RDE_CritOPCS
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_CritOPCS', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_CritOPCS
 
-	CREATE TABLE RDE_CritOPCS (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_CritOPCS (
 		PERSONID							VARCHAR(14),
 		MRN									VARCHAR(20),
 		NHS_NUMBER							VARCHAR(20),
@@ -3207,7 +3881,7 @@ IF @CritCare=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_CritOPCS
+     INSERT INTO  BH_RESEARCH.DBO.RDE_CritOPCS
         SELECT DISTINCT
 	CONVERT(VARCHAR(14),[DEM].[PERSON_ID])                                     AS PERSONID,
 	CONVERT(VARCHAR(20), [DEM].MRN)									AS MRN,
@@ -3216,7 +3890,7 @@ IF @CritCare=1
 	CONVERT(VARCHAR(30), [OPCS_Proc_Dt])							AS StartDate,
 	CONVERT(VARCHAR(30), [OPCS_Proc_Code])							AS ProcCode
 FROM [BH_DATAWAREHOUSE].[dbo].[CRIT_CARE_OPCS] a
-INNER JOIN RDE_Patient_Demographics DEM       
+INNER JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics DEM       
 ON DEM.MRN=a.mrn
 
 
@@ -3247,14 +3921,15 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=1100
 SET @ErrorMessage='Measurements'
 
-IF OBJECT_ID(N'RDE_Measurements', N'U') IS NOT NULL DROP TABLE RDE_Measurements
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_Measurements', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_Measurements
 
-	CREATE TABLE RDE_Measurements (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_Measurements (
 		PERSONID							VARCHAR(14),
 		MRN									VARCHAR(20),
 		NHS_NUMBER							VARCHAR(20),
 		SystemLookup						VARCHAR(200),
 		ClinicalSignificanceDate			VARCHAR(30),
+		ResultNumeric						BIT,
 		EventResult							VARCHAR(100),
 		UnitsCode							INTEGER,
 		UnitsDesc							VARCHAR(100),
@@ -3276,13 +3951,14 @@ IF @CritCare=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_Measurements
+     INSERT INTO  BH_RESEARCH.DBO.RDE_Measurements
         SELECT 
 			CONVERT(VARCHAR(14),[cce].[PERSON_ID])                                     AS PERSONID,
 			Enc.MRN,
 		    Enc.NHS_Number																AS NHS_Number, 
 			CONVERT(VARCHAR(200), srf.code_desc_txt) 									AS SystemLookup,
   			CONVERT(VARCHAR(30), cce.CLIN_SIGNIFICANCE_DT_TM)							AS ClinicalSignificanceDate, 
+			CASE WHEN ISNUMERIC(cce.EVENT_RESULT_TXT) <> 1 THEN 0 ELSE 1 END			AS ResultNumeric,
 			CONVERT(VARCHAR(100), cce.EVENT_RESULT_TXT)									AS EventResult,  
 			cce.EVENT_RESULT_UNITS_CD													AS UnitsCode, 
 			CONVERT(VARCHAR(100), urf.code_desc_txt) 									AS UnitsDesc, 
@@ -3293,18 +3969,23 @@ IF @CritCare=1
 			CONVERT(VARCHAR(100), cce.EVENT_TAG_TXT)									AS EventText, 
 			CONVERT(VARCHAR(100), ref.code_desc_txt)									AS EventType, 
 			CONVERT(VARCHAR(100), TESTnm.code_desc_txt) 								AS EventParent
-  FROM TempCE cce WITH (NOLOCK)
-            LEFT JOIN RDE_Encounter ENC with (nolock)
+  FROM BH_RESEARCH.DBO.TempCE cce WITH (NOLOCK)
+            LEFT JOIN  BH_RESEARCH.DBO.RDE_Encounter ENC with (nolock)
                 ON ENC.ENCNTR_ID = cce.ENCNTR_ID
   LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] ref WITH (NOLOCK) on cce.event_cd = ref.CODE_VALUE_CD
   LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] urf WITH (NOLOCK) on cce.event_result_units_cd  = urf.CODE_VALUE_CD
   LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] nrf WITH (NOLOCK) on cce.normalcy_cd  = nrf.CODE_VALUE_CD
   LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] srf WITH (NOLOCK) on cce.contributor_system_cd  = srf.CODE_VALUE_CD
-  LEFT OUTER JOIN TempCE pev with (nolock) ON cce.PARENT_EVENT_ID=pev.EVENT_ID
+  LEFT OUTER JOIN BH_RESEARCH.DBO.TempCE  pev with (nolock) ON cce.PARENT_EVENT_ID=pev.EVENT_ID
   LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo]. PI_LKP_CDE_CODE_VALUE_REF TESTnm with (nolock) ON pev.EVENT_CD = TESTnm.CODE_VALUE_CD	
-    WHERE (cce.EVENT_RESULT_UNITS_CD > 0)
+   WHERE (cce.EVENT_RESULT_UNITS_CD > 0
+	OR (
+ 		cce.EVENT_RESULT_NBR = '0' AND cce.EVENT_RESULT_TXT != '0' AND ISNUMERIC(cce.EVENT_RESULT_TXT) != 1
+	    AND cce.EVENT_RESULT_STATUS_CD = 25 AND cce.ORDER_ID != '0'
+		AND cce.EVENT_RESULT_TXT NOT LIKE '%Comment%'
+	)	)
 	AND 
-     ((cce.CONTRIBUTOR_SYSTEM_CD != '6378204' AND cce.CONTRIBUTOR_SYSTEM_CD != '6141416') OR cce.CONTRIBUTOR_SYSTEM_CD is null)
+     ((cce.CONTRIBUTOR_SYSTEM_CD != '6378204' AND cce.CONTRIBUTOR_SYSTEM_CD != '6141416') OR cce.CONTRIBUTOR_SYSTEM_CD IS NULL)
 
 
 
@@ -3336,9 +4017,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=1200
 SET @ErrorMessage='Emergency Department'
 
-IF OBJECT_ID(N'RDE_EmergencyD', N'U') IS NOT NULL DROP TABLE RDE_EmergencyD
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_EmergencyD', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_EmergencyD
 
-	CREATE TABLE RDE_EmergencyD (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_EmergencyD (
 		PERSONID							VARCHAR(14),
 		MRN									VARCHAR(20),
 		NHS_NUMBER							VARCHAR(20),
@@ -3362,7 +4043,7 @@ IF @Emergency=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_EmergencyD
+     INSERT INTO  BH_RESEARCH.DBO.RDE_EmergencyD
         SELECT 
 		CONVERT(VARCHAR(14), [DEM].[PERSON_ID])											AS PERSONID,
 		DEM.MRN																			AS MRN,	
@@ -3378,7 +4059,7 @@ IF @Emergency=1
 		CONVERT(VARCHAR(1000), dbo.csvString([REF].[Diagnosis_Snomed_Desc]))										AS SNOMED_Desc
 
 		FROM [BH_DATAWAREHOUSE].[dbo].[CDS_AEA] AEA 
-		INNER JOIN RDE_Patient_Demographics DEM     ON DEM.MRN=AEA.mrn
+		INNER JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics DEM     ON DEM.MRN=AEA.mrn
 		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_REF_DISCHARGE_DESTINATION] e with (nolock) on AEA.Discharge_Destination_Cd = e.Discharge_Destination_Snomed_Cd
 		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_CDS_ECD_MAP_ATT_DISP_DISCH_STAT] d with (nolock) on AEA.Discharge_Status_Cd = d.Discharge_Status_ECD_Cd
 		LEFT JOIN [BH_DATAWAREHOUSE].[dbo].[LKP_SITE] ts with (nolock) on AEA.treatment_site_code = ts.site_cd
@@ -3421,9 +4102,9 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 SET @ErrorPosition=1300
 SET @ErrorMessage='Medicines Administered'
 
-IF OBJECT_ID(N'RDE_MedAdmin', N'U') IS NOT NULL DROP TABLE RDE_MedAdmin
+IF OBJECT_ID(N'BH_RESEARCH.DBO.RDE_MedAdmin', N'U') IS NOT NULL DROP TABLE  BH_RESEARCH.DBO.RDE_MedAdmin
 
-	CREATE TABLE RDE_MedAdmin (
+	CREATE TABLE  BH_RESEARCH.DBO.RDE_MedAdmin (
 		PERSONID							VARCHAR(14),
 		MRN									VARCHAR(20),
 		NHS_NUMBER							VARCHAR(20),
@@ -3478,7 +4159,7 @@ IF @PharmacyOrders=1
 
   SELECT @StartDate =GETDATE()
 
-     INSERT INTO RDE_MedAdmin
+     INSERT INTO  BH_RESEARCH.DBO.RDE_MedAdmin
         SELECT 
 		CONVERT(VARCHAR(14),[cce].[PERSON_ID])                                     				AS PERSONID,
 		Enc.MRN,
@@ -3525,10 +4206,10 @@ IF @PharmacyOrders=1
 	 	CONVERT(VARCHAR(30), ADMIN_START_DT_TM) 												AS ADMIN_START_DATE, 
 		CONVERT(VARCHAR(30), ADMIN_END_DT_TM) 													AS ADMIN_END_DATE
 
-		 FROM TempCE cce 
+		 FROM BH_RESEARCH.DBO.TempCE  cce 
 		 INNER JOIN BH_DATAWAREHOUSE.dbo.MILL_DIR_MED_ADMIN_EVENT MAE with (nolock)
 		 ON cce.EVENT_ID = MAE.EVENT_ID
-            LEFT JOIN RDE_Encounter ENC with (nolock)
+            LEFT JOIN  BH_RESEARCH.DBO.RDE_Encounter ENC with (nolock)
                 ON ENC.ENCNTR_ID = cce.ENCNTR_ID
 	LEFT JOIN (SELECT *, row_number() over (partition by EVENT_ID order by VALID_FROM_DT_TM DESC) AS RN FROM [BH_DATAWAREHOUSE].[dbo].[MILL_DIR_CE_MED_RESULT] with (nolock)) MR 
 		ON (MAE.EVENT_ID = MR.EVENT_ID AND MR.RN = 1)
@@ -3559,36 +4240,6 @@ INSERT INTO BH_RESEARCH.dbo.[RESEARCH_AUDIT_LOG]
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-=======
->>>>>>> main
 if @Filetype ='text' 
 
 begin
@@ -3600,21 +4251,27 @@ SELECT @StartDate=GETDATE()
 if @Anonymous = 1
 BEGIN
 
-DROP INDEX IF EXISTS indx_Patho ON RDE_Pathology,
-indx_Aria ON RDE_ARIAPharmacy,
-indx_PF ON RDE_Powerforms,
-indx_Rdio ON RDE_Radiology,
-indx_FHist ON RDE_FamilyHistory,
-indx_BLOB ON RDE_BLOBDataset,
-indx_Proc ON RDE_PC_PROCEDURES,
-indx_Diag ON RDE_PC_DIAGNOSIS,
-indx_Prob ON RDE_PC_PROBLEMS,
-indx_MB ON RDE_MSDS_Booking,
-indx_CC ON RDE_MSDS_CareContact,
-indx_Lab ON RDE_MSDS_Delivery,
-indx_MSD ON RDE_MSDS_Diagnosis,
-indx_PO ON RDE_PharmacyOrders,
-indx_Allergy ON RDE_AllergyDetails;
+DROP INDEX IF EXISTS indx_Patho ON  BH_RESEARCH.DBO.RDE_Pathology,
+indx_Aria ON  BH_RESEARCH.DBO.RDE_ARIAPharmacy,
+indx_PF ON  BH_RESEARCH.DBO.RDE_Powerforms,
+indx_Rdio ON  BH_RESEARCH.DBO.RDE_Radiology,
+indx_FHist ON  BH_RESEARCH.DBO.RDE_FamilyHistory,
+indx_BLOB ON  BH_RESEARCH.DBO.RDE_BLOBDataset,
+indx_Proc ON  BH_RESEARCH.DBO.RDE_PC_PROCEDURES,
+indx_Diag ON  BH_RESEARCH.DBO.RDE_PC_DIAGNOSIS,
+indx_Prob ON  BH_RESEARCH.DBO.RDE_PC_PROBLEMS,
+indx_MB ON  BH_RESEARCH.DBO.RDE_MSDS_Booking,
+indx_CC ON  BH_RESEARCH.DBO.RDE_MSDS_CareContact,
+indx_Lab ON  BH_RESEARCH.DBO.RDE_MSDS_Delivery,
+indx_MSD ON  BH_RESEARCH.DBO.RDE_MSDS_Diagnosis,
+indx_PO ON  BH_RESEARCH.DBO.RDE_PharmacyOrders,
+indx_MSD ON  BH_RESEARCH.DBO.RDE_MAT_NNU_Exam,
+indx_MSD ON  BH_RESEARCH.DBO.RDE_MAT_NNU_Episodes,
+indx_MSD ON  BH_RESEARCH.dbo.RDE_MAT_NNU_NCCMDS,
+indx_Allergy ON  BH_RESEARCH.DBO.RDE_AllergyDetails,
+indx_iqemo ON  BH_RESEARCH.dbo.RDE_iQEMO,
+
+indx_Patho ON BH_RESEARCH.DBO.RDE_RAW_Pathology;
 
 ALTER TABLE BH_RESEARCH.dbo.RDE_APC_DIAGNOSIS DROP COLUMN IF EXISTS NHSNumber
 ALTER TABLE BH_RESEARCH.dbo.RDE_APC_DIAGNOSIS DROP COLUMN IF EXISTS NHS_Number
@@ -3624,6 +4281,22 @@ ALTER TABLE BH_RESEARCH.dbo.RDE_APC_OPCS DROP COLUMN IF EXISTS NHSNumber
 ALTER TABLE BH_RESEARCH.dbo.RDE_APC_OPCS DROP COLUMN IF EXISTS NHS_Number
 ALTER TABLE BH_RESEARCH.dbo.RDE_APC_OPCS DROP COLUMN IF EXISTS MRN
 
+ALTER TABLE BH_RESEARCH.DBO.RDE_MAT_NNU_Exam DROP COLUMN IF EXISTS NHSNumber
+ALTER TABLE BH_RESEARCH.DBO.RDE_MAT_NNU_Exam DROP COLUMN IF EXISTS NHS_Number
+ALTER TABLE BH_RESEARCH.DBO.RDE_MAT_NNU_Exam DROP COLUMN IF EXISTS MRN
+
+ALTER TABLE BH_RESEARCH.DBO.RDE_MAT_NNU_Episodes DROP COLUMN IF EXISTS NHSNumber
+ALTER TABLE BH_RESEARCH.DBO.RDE_MAT_NNU_Episodes DROP COLUMN IF EXISTS NHS_Number
+ALTER TABLE BH_RESEARCH.DBO.RDE_MAT_NNU_Episodes DROP COLUMN IF EXISTS MRN
+
+ALTER TABLE BH_RESEARCH.dbo.RDE_MAT_NNU_NCCMDS DROP COLUMN IF EXISTS NHSNumber
+ALTER TABLE BH_RESEARCH.dbo.RDE_MAT_NNU_NCCMDS DROP COLUMN IF EXISTS NHS_Number
+ALTER TABLE BH_RESEARCH.dbo.RDE_MAT_NNU_NCCMDS DROP COLUMN IF EXISTS MRN
+
+ALTER TABLE BH_RESEARCH.dbo.RDE_iQEMO DROP COLUMN IF EXISTS NHSNumber
+ALTER TABLE BH_RESEARCH.dbo.RDE_iQEMO DROP COLUMN IF EXISTS NHS_Number
+ALTER TABLE BH_RESEARCH.dbo.RDE_iQEMO DROP COLUMN IF EXISTS MRN
+
 ALTER TABLE BH_RESEARCH.dbo.RDE_OP_DIAGNOSIS DROP COLUMN IF EXISTS NHSNumber
 ALTER TABLE BH_RESEARCH.dbo.RDE_OP_DIAGNOSIS DROP COLUMN IF EXISTS NHS_Number
 ALTER TABLE BH_RESEARCH.dbo.RDE_OP_DIAGNOSIS DROP COLUMN IF EXISTS MRN
@@ -3631,6 +4304,10 @@ ALTER TABLE BH_RESEARCH.dbo.RDE_OP_DIAGNOSIS DROP COLUMN IF EXISTS MRN
 ALTER TABLE BH_RESEARCH.dbo.RDE_OPA_OPCS DROP COLUMN IF EXISTS NHSNumber
 ALTER TABLE BH_RESEARCH.dbo.RDE_OPA_OPCS DROP COLUMN IF EXISTS NHS_Number
 ALTER TABLE BH_RESEARCH.dbo.RDE_OPA_OPCS DROP COLUMN IF EXISTS MRN
+
+ALTER TABLE BH_RESEARCH.DBO.RDE_RAW_Pathology DROP COLUMN IF EXISTS NHSNumber
+ALTER TABLE BH_RESEARCH.DBO.RDE_RAW_Pathology DROP COLUMN IF EXISTS NHS_Number
+ALTER TABLE BH_RESEARCH.DBO.RDE_RAW_Pathology DROP COLUMN IF EXISTS MRN
 
 
 ALTER TABLE BH_RESEARCH.dbo.RDE_CDS_APC DROP COLUMN IF EXISTS NHSNumber
@@ -3758,14 +4435,44 @@ ALTER TABLE BH_RESEARCH.dbo.RDE_MedAdmin DROP COLUMN IF EXISTS MRN
 
 END
 
-
-=======
->>>>>>> main
 declare @extract_type varchar(100)
 select @extract_type =[Extract_Type] from [RESEARCH_EXTRACT_CONFIG] where Extract_ID=@EXTRACT_ID
 Set @ErrorPosition=2000
 Set @ErrorMessage='checking file type'
-EXEC [bh_datawarehouse].dbo.[sp_Extract_Write_File] @extract_type
+
+
+DECLARE @bpccommand VARCHAR(1000);
+
+DECLARE export_cursor CURSOR FOR
+SELECT Output_Table, Extract_Path, FileName_Prefix
+FROM [BH_RESEARCH].[dbo].[Extract_Files_Config]
+WHERE Extract_Type = @extract_type;
+
+Declare @ServerName	VARCHAR(50)
+DECLARE @OutputTable VARCHAR(255);
+DECLARE @ExtractPath VARCHAR(255);
+DECLARE @FileNamePrefix VARCHAR(255);
+DECLARE @CurrentDate VARCHAR(10);
+
+SET @CurrentDate = CONVERT(VARCHAR(10), GETDATE(), 112);
+Set @ServerName = Convert(Varchar(20),serverproperty('MachineName')) + Case when serverproperty('InstanceName') is null then '' else '\' + Convert(Varchar(20),serverproperty('InstanceName')) end
+
+OPEN export_cursor;
+FETCH NEXT FROM export_cursor INTO @OutputTable, @ExtractPath, @FileNamePrefix;
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    SET @bpccommand = 'BCP [BH_RESEARCH].[dbo].' + @OutputTable + ' out "' + @ExtractPath + @FileNamePrefix + '_' + @CurrentDate + '.csv" -c -t, -T -C 65001 -S @ServerName';
+    EXEC xp_cmdshell @bpccommand;
+
+    FETCH NEXT FROM export_cursor INTO @OutputTable, @ExtractPath, @FileNamePrefix;
+END;
+
+CLOSE export_cursor;
+DEALLOCATE export_cursor;
+
+
+--EXEC [bh_datawarehouse].dbo.[sp_Extract_Write_File] @extract_type
 
 SELECT	@EndDate = GETDATE();
 select @time= CAST( DATEPART(HOUR,   @EndDate - @StartDate)        AS nvarchar(100)) + ' -  HRS '
@@ -3793,12 +4500,12 @@ Declare @TableName         Varchar(200)
 declare @cmd			   Varchar(200)
 Declare @CMD_String        varchar(8000)
 -------------------------------------------
-SELECT SUBSTRING(Output_Table, CHARINDEX('.dbo.',Output_Table)+5, len(Output_Table))as tabname,FileName_Prefix,FileNo into #TableName1  FROM   bh_datawarehouse.dbo.Extract_Files_Config 
+SELECT SUBSTRING(Output_Table, CHARINDEX('.dbo.',Output_Table)+5, len(Output_Table))as tabname,FileName_Prefix,FileNo into #TableName1  FROM   bh_research.dbo.Extract_Files_Config 
 		   WHERE  Extract_Type = @Extract_Type
 
 --Save path into the variable
     
-SELECT @path=Extract_Path  FROM   bh_datawarehouse.dbo.Extract_Files_Config WHERE  Extract_Type = @Extract_Type
+SELECT @path=Extract_Path  FROM   bh_research.dbo.Extract_Files_Config WHERE  Extract_Type = @Extract_Type
     
 	SET @cmd = 'dir ' + @path + '*.csv /b'
     INSERT INTO  #ALLFILENAMES(ExtrFilename)
@@ -3931,7 +4638,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		ALIAS.[CodeType],
 		ALIAS.[Code],
 		ALIAS.[IssueDate]
-		FROM RDE_Aliases ALIAS WHERE A.[NHS_Number]=ALIAS.NHS_NUMBER FOR JSON PATH),
+		FROM  BH_RESEARCH.DBO.RDE_Aliases ALIAS WHERE A.[NHS_Number]=ALIAS.NHS_NUMBER FOR JSON PATH),
 		          
 	 Powertrials= 
 		(SELECT 
@@ -3944,7 +4651,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		PTRIALS.[Off_Study_Reason],
 		PTRIALS.[Off_Study_Comment]
 		
-		FROM RDE_MILL_Powertrials PTRIALS WHERE A.[NHS_Number]=PTRIAlS.NHS_NUMBER FOR JSON PATH),
+		FROM  BH_RESEARCH.DBO.RDE_MILL_Powertrials PTRIALS WHERE A.[NHS_Number]=PTRIAlS.NHS_NUMBER FOR JSON PATH),
 
 	Inpatient= 
 		(SELECT 
@@ -3980,7 +4687,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		,D.[ICD_DIAGNOSIS_CD] [ICDCode]
 		,D.ICD_Diag_Desc  [ICDDesc]
 		
-		FROM RDE_APC_DIAGNOSIS D WHERE A.[NHS_Number]=D.NHS_Number AND D.CDS_APC_ID=APC.CDS_APC_ID FOR JSON PATH),
+		FROM  BH_RESEARCH.DBO.RDE_APC_DIAGNOSIS D WHERE A.[NHS_Number]=D.NHS_Number AND D.CDS_APC_ID=APC.CDS_APC_ID FOR JSON PATH),
 				
 	 APCProcedure=
 		(SELECT 
@@ -3990,9 +4697,9 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		,P.[OPCS_Proc_Cd]   [OPCSCode]
 		,P.Proc_Desc  [OPCSDesc]
 		,P.OPCS_Proc_Dt [OPCSDT]
-		FROM RDE_APC_OPCS P WHERE A.[NHS_Number]=P.NHS_Number AND APC.CDS_APC_ID=P.CDS_APC_ID ORDER BY P.OPCS_Proc_Dt FOR JSON PATH)
+		FROM  BH_RESEARCH.DBO.RDE_APC_OPCS P WHERE A.[NHS_Number]=P.NHS_Number AND APC.CDS_APC_ID=P.CDS_APC_ID ORDER BY P.OPCS_Proc_Dt FOR JSON PATH)
 
-		FROM  RDE_CDS_APC APC WHERE APC.NHS_NUMBER=A.NHS_Number ORDER BY APC.[Adm_Dt]
+		FROM   BH_RESEARCH.DBO.RDE_CDS_APC APC WHERE APC.NHS_NUMBER=A.NHS_Number ORDER BY APC.[Adm_Dt]
 		FOR JSON PATH),  --Inpatient ends here
 
     Outpatient=
@@ -4017,7 +4724,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		,D1.[ICD_DIAGNOSIS_CD] [ICDCode]
 		,D1.ICD_Diag_Desc  [ICDDesc]
 		
-		FROM RDE_OP_DIAGNOSIS D1 WHERE A.[NHS_Number]=D1.NHS_Number AND D1.CDS_OPA_ID=OPA.CDS_OPA_ID  FOR JSON PATH),
+		FROM  BH_RESEARCH.DBO.RDE_OP_DIAGNOSIS D1 WHERE A.[NHS_Number]=D1.NHS_Number AND D1.CDS_OPA_ID=OPA.CDS_OPA_ID  FOR JSON PATH),
 
 	  OPProcedure=
 		(SELECT 
@@ -4027,11 +4734,11 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		,P1.[opcs_proc_dt] [OPCSDt]
 		,P1.[OPCS_Proc_Num] [OPCSNum]
 
-		FROM RDE_OPA_OPCS P1 WHERE A.NHS_Number=P1.NHS_Number AND OPA.CDS_OPA_ID=P1.CDS_OPA_ID ORDER BY P1.[opcs_proc_dt]
+		FROM  BH_RESEARCH.DBO.RDE_OPA_OPCS P1 WHERE A.NHS_Number=P1.NHS_Number AND OPA.CDS_OPA_ID=P1.CDS_OPA_ID ORDER BY P1.[opcs_proc_dt]
 		FOR JSON PATH)
 
 		
-		FROM RDE_CDS_OPA OPA WHERE OPA.NHS_NUMBER=A.NHS_Number ORDER BY OPA.[Att_Dt]
+		FROM  BH_RESEARCH.DBO.RDE_CDS_OPA OPA WHERE OPA.NHS_NUMBER=A.NHS_Number ORDER BY OPA.[Att_Dt]
 		FOR JSON PATH),
 
 	 Pathology= 
@@ -4052,7 +4759,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		,PA.EventID
 		,PA.SnomedCode
 
-		FROM  RDE_Pathology PA WHERE PA.NHS_NUMBER=A.NHS_Number --and (PA.Result_nbr is not null or PA.ResultTxt is not null )
+		FROM   BH_RESEARCH.DBO.RDE_Pathology PA WHERE PA.NHS_NUMBER=A.NHS_Number --and (PA.Result_nbr is not null or PA.ResultTxt is not null )
 		ORDER BY PA.[RequestDate]
 		FOR JSON PATH ),
 
@@ -4068,7 +4775,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		,PH.AdmnRoute
 		,PH.SetDateTPInit
 		,PH.TreatPlan
-		FROM RDE_ARIAPharmacy PH WHERE A.[NHS_Number]=PH.NHS_Number AND [ProductDesc] IS NOT NULL ORDER BY AdmnStartDate FOR JSON PATH),
+		FROM  BH_RESEARCH.DBO.RDE_ARIAPharmacy PH WHERE A.[NHS_Number]=PH.NHS_Number AND [ProductDesc] IS NOT NULL ORDER BY AdmnStartDate FOR JSON PATH),
 				
 	 Powerforms=
 		(SELECT distinct
@@ -4080,9 +4787,9 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		FormDetails=(select distinct
 		 PW1.Element
 		,PW1.[Response] 
-		from RDE_Powerforms pw1 WHERE pw1.[NHS_Number]=PW.NHS_Number AND (pw1.ENCNTR_ID=pw.ENCNTR_ID and pw.PerformDate=pw1.PerformDate and pw.Form=pw1.Form) FOR JSON PATH)
+		from  BH_RESEARCH.DBO.RDE_Powerforms pw1 WHERE pw1.[NHS_Number]=PW.NHS_Number AND (pw1.ENCNTR_ID=pw.ENCNTR_ID and pw.PerformDate=pw1.PerformDate and pw.Form=pw1.Form) FOR JSON PATH)
 
-		FROM RDE_Powerforms PW WHERE A.[NHS_Number]=PW.NHS_Number AND ([FORM] IS NOT NULL OR [Section] IS NOT NULL)  ORDER BY PW.[PerformDate]  FOR JSON PATH),
+		FROM  BH_RESEARCH.DBO.RDE_Powerforms PW WHERE A.[NHS_Number]=PW.NHS_Number AND ([FORM] IS NOT NULL OR [Section] IS NOT NULL)  ORDER BY PW.[PerformDate]  FOR JSON PATH),
 
 	 Imaging=
 		(SELECT 
@@ -4103,7 +4810,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 	    ,R.ResultStatus
 		,R.ReportText
 		,R.EventID
-      	FROM RDE_Radiology R  WHERE A.NHS_Number=R.NHS_Number ORDER BY [ExamStart]
+      	FROM  BH_RESEARCH.DBO.RDE_Radiology R  WHERE A.NHS_Number=R.NHS_Number ORDER BY [ExamStart]
 		FOR JSON PATH),
 
 		BlobData=
@@ -4124,7 +4831,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		 ,BLOB.Status
 		 ,BLOB.SourceSys
 		 ,BLOB.EventReltnDesc
-		FROM RDE_BLOBDataset BLOB WHERE A.[NHS_Number]=BLOB.NHS_Number ORDER BY ClinicalSignificantDate FOR JSON PATH),	   
+		FROM  BH_RESEARCH.DBO.RDE_BLOBDataset BLOB WHERE A.[NHS_Number]=BLOB.NHS_Number ORDER BY ClinicalSignificantDate FOR JSON PATH),	   
 		
 	 FamilyHistory=
 		(SELECT 
@@ -4141,7 +4848,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		  ,FH.BegEffectDate
 		  ,FH.EndEffectDate
 		  ,FH.FHX_VALUE_FLG
-		FROM RDE_FamilyHistory FH WHERE A.[NHS_Number]=FH.NHS_Number ORDER BY FH.BegEffectDate FOR JSON PATH),	  
+		FROM  BH_RESEARCH.DBO.RDE_FamilyHistory FH WHERE A.[NHS_Number]=FH.NHS_Number ORDER BY FH.BegEffectDate FOR JSON PATH),	  
 		
 	 PCProblems=
 		(SELECT 
@@ -4158,7 +4865,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		   ,RTRIM (PB.Axis) AS Axis
 		   ,RTRIM (PB.SecDesc) AS SecDesc
 		   ,RTRIM (PB.ProbCode) AS ProbCode
-		FROM RDE_PC_PROBLEMS PB WHERE A.[NHS_Number]=PB.NHS_Number  ORDER BY PB.OnsetDate FOR JSON PATH),
+		FROM  BH_RESEARCH.DBO.RDE_PC_PROBLEMS PB WHERE A.[NHS_Number]=PB.NHS_Number  ORDER BY PB.OnsetDate FOR JSON PATH),
 	
 	  PCDiagnosis=
 		(SELECT 
@@ -4173,7 +4880,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		   ,RTRIM (PD.Vocab) AS Vocab
 		   ,RTRIM (PD.Axis) AS Axis
 		   
-		FROM RDE_PC_DIAGNOSIS PD WHERE A.[NHS_Number]=PD.NHS_Number ORDER BY PD.DiagDt FOR JSON PATH),	     
+		FROM  BH_RESEARCH.DBO.RDE_PC_DIAGNOSIS PD WHERE A.[NHS_Number]=PD.NHS_Number ORDER BY PD.DiagDt FOR JSON PATH),	     
      PCProcedures=
 		(SELECT 
 		    RTRIM (PP.ProcType) AS ProcType
@@ -4185,7 +4892,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		   ,RTRIM (PP.TreatmentFunc)  AS TreatmentFunc
 		   ,RTRIM (PP.Specialty) AS Specialty
 		   ,RTRIM (PP.Comment) AS Comment
-		FROM RDE_PC_PROCEDURES PP WHERE A.[NHS_Number]=PP.NHS_Number ORDER BY PP.ProcDt FOR JSON PATH),	  
+		FROM  BH_RESEARCH.DBO.RDE_PC_PROCEDURES PP WHERE A.[NHS_Number]=PP.NHS_Number ORDER BY PP.ProcDt FOR JSON PATH),	  
 	/*
 	MSDS_Booking= 
 		(SELECT 
@@ -4219,7 +4926,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 					,D.LocalFetalID
 					,D.FetalOrder
 	
-			FROM  RDE_MSDS_Diagnosis D WHERE D.NHS_Number=A.NHS_Number AND D.DiagPregID=Book.PregnancyID
+			FROM   BH_RESEARCH.DBO.RDE_MSDS_Diagnosis D WHERE D.NHS_Number=A.NHS_Number AND D.DiagPregID=Book.PregnancyID
 		    FOR JSON PATH),  
 	        
 			MSDS_CareContact= 
@@ -4237,7 +4944,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 					,CC.CancelDate
 					,CC.RepAppOffDate
 	
-			FROM  RDE_MSDS_CareContact CC WHERE CC.NHS_Number=A.NHS_Number AND CC.PregnancyID=Book.PregnancyID
+			FROM   BH_RESEARCH.DBO.RDE_MSDS_CareContact CC WHERE CC.NHS_Number=A.NHS_Number AND CC.PregnancyID=Book.PregnancyID
 		    FOR JSON PATH),  
 
 			MSDS_Delivery= 
@@ -4260,11 +4967,11 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 					,Del.PlancentaDelMeth
 					,Del.LabOnsetPresentation
 	
-			FROM  RDE_MSDS_Delivery Del WHERE Del.NHS_Number=A.NHS_Number AND Del.PregID=Book.PregnancyID
+			FROM   BH_RESEARCH.DBO.RDE_MSDS_Delivery Del WHERE Del.NHS_Number=A.NHS_Number AND Del.PregID=Book.PregnancyID
 		    FOR JSON PATH)
 			
 
-		FROM  RDE_MSDS_Booking Book WHERE Book.NHS_Number=A.NHS_Number ORDER BY MatDischargeDate
+		FROM   BH_RESEARCH.DBO.RDE_MSDS_Booking Book WHERE Book.NHS_Number=A.NHS_Number ORDER BY MatDischargeDate
 		FOR JSON PATH),
 	*/	
 		 PharmacyOrders=
@@ -4285,7 +4992,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		 ,Ord.CompletedDT
 		 ,Ord.DiscontinuedDT
 		 ,Ord.ConceptIdent
-      	FROM RDE_PharmacyOrders Ord  WHERE A.NHS_Number=Ord.NHS_Number ORDER BY OrderDate
+      	FROM  BH_RESEARCH.DBO.RDE_PharmacyOrders Ord  WHERE A.NHS_Number=Ord.NHS_Number ORDER BY OrderDate
 		FOR JSON PATH),
 
 
@@ -4313,7 +5020,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 		 ,Al.DataStatusDT
 		 ,Al.VocabDesc
 		 ,Al.PrecisionDesc
-      	FROM RDE_AllergyDetails Al  WHERE A.NHS_Number=Al.NHS_Number ORDER BY CreatedDT
+      	FROM  BH_RESEARCH.DBO.RDE_AllergyDetails Al  WHERE A.NHS_Number=Al.NHS_Number ORDER BY CreatedDT
 		FOR JSON PATH),
 
 		SCRReferrals=
@@ -4362,7 +5069,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 				,TC.Date_Time
 				,TC.Comments
 
-		     FROM RDE_SCR_TrackingComments TC WHERE A.NHS_Number=TC.NHS_Number 
+		     FROM  BH_RESEARCH.DBO.RDE_SCR_TrackingComments TC WHERE A.NHS_Number=TC.NHS_Number 
 			 FOR JSON PATH),
 
 		  SCRCarePlan= 
@@ -4382,7 +5089,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 				,C.NetworkComments
 				,C.MDTComments
 
-		     FROM RDE_SCR_CarePlan C WHERE A.NHS_Number=C.NHS_Number 
+		     FROM  BH_RESEARCH.DBO.RDE_SCR_CarePlan C WHERE A.NHS_Number=C.NHS_Number 
 			 FOR JSON PATH),
 
 		    SCRTreatment= 
@@ -4407,7 +5114,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 				,DT.RootTCIComments
 				,DT.ROOT_DATE_COMMENTS
 
-		     FROM RDE_SCR_DefTreatment DT WHERE A.NHS_Number=DT.NHS_Number 
+		     FROM  BH_RESEARCH.DBO.RDE_SCR_DefTreatment DT WHERE A.NHS_Number=DT.NHS_Number 
 			 FOR JSON PATH),
 
 			 SCRDiagnosis= 
@@ -4432,7 +5139,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 				,D.PathwayEndFaster
 				,D.PathwayEndReason
 
-		     FROM RDE_SCR_Diagnosis D WHERE A.NHS_Number=D.NHS_Number 
+		     FROM  BH_RESEARCH.DBO.RDE_SCR_Diagnosis D WHERE A.NHS_Number=D.NHS_Number 
 			 FOR JSON PATH),
 
 			 SCRInvestigations= 
@@ -4453,7 +5160,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 				,I.ImagingReport
 				,I.StagingLaproscopyPerformed
 
-		     FROM RDE_SCR_Investigations I WHERE A.NHS_Number=I.NHS_Number 
+		     FROM  BH_RESEARCH.DBO.RDE_SCR_Investigations I WHERE A.NHS_Number=I.NHS_Number 
 			 FOR JSON PATH),
 
 			  SCRPathology= 
@@ -4474,7 +5181,7 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 				,P.SNomedCT
 				,P.SNomedID
 
-		     FROM RDE_SCR_Pathology P WHERE A.NHS_Number=P.NHS_Number 
+		     FROM  BH_RESEARCH.DBO.RDE_SCR_Pathology P WHERE A.NHS_Number=P.NHS_Number 
 			 FOR JSON PATH),
 
 			   SCRImaging= 
@@ -4493,13 +5200,13 @@ DECLARE @JSONDATA NVARCHAR(MAX)
 				,SI.StagingProc
 				,SI.ImageCD
 
-		     FROM RDE_SCR_Imaging SI WHERE A.NHS_Number=SI.NHS_Number 
+		     FROM  BH_RESEARCH.DBO.RDE_SCR_Imaging SI WHERE A.NHS_Number=SI.NHS_Number 
 			 FOR JSON PATH)
 
-      	FROM RDE_SCR_Referrals R  WHERE A.NHS_Number=R.NHS_Number --ORDER BY [ExamStart]
+      	FROM  BH_RESEARCH.DBO.RDE_SCR_Referrals R  WHERE A.NHS_Number=R.NHS_Number --ORDER BY [ExamStart]
 		FOR JSON PATH)
 		
-		FROM RDE_Patient_Demographics A WHERE NHS_Number IS NOT NULL -- a.NHSnumber='4445878030' 
+		FROM  BH_RESEARCH.DBO.RDE_Patient_Demographics A WHERE NHS_Number IS NOT NULL -- a.NHSnumber='4445878030' 
 		FOR JSON PATH))AS Nvarchar(MAX)) --patientdemogrphics ends here
 
 Set @ErrorPosition=2500
