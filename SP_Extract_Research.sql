@@ -1033,15 +1033,13 @@ IF @Pathology=1
 		   ,CONVERT(VARCHAR(100),ORD.CONCEPT_CKI_IDENT)				   AS SnomedCode
 		   ,CONVERT(VARCHAR(150),EVE.EVENT_ID)						   AS EventID
 		   ,CONVERT(VARCHAR(50), LEFT(EVE.REFERENCE_NBR, 11))		   AS LabNo
-      FROM   BH_RESEARCH.DBO.RDE_Encounter ENC
-            INNER JOIN  BH_RESEARCH.DBO.TempOrder ORD  with (nolock)
-	            ON 
-				ENC.ENCNTR_ID=ORD.ENCNTR_ID
-	               AND ord.LAST_ORDER_STATUS_CD=2543 AND ord.ORDERABLE_TYPE_CD=2513 --Only extracting completed laboratory data  
-				   --2513 Laboratory    --2543  Completed,  10576 Laboratory
-	        INNER JOIN BH_RESEARCH.DBO.TempCE  EVE  with (nolock)
-	            ON ORD.ENCNTR_ID=EVE.ENCNTR_ID AND ORD.ORDER_ID=EVE.ORDER_ID
-	               AND EVE.CONTRIBUTOR_SYSTEM_CD = '6378204' and EVE.CONTRIBUTOR_SYSTEM_CD is not null  --6378204  PATHOLOGY   
+		   FROM BH_RESEARCH.DBO.TempCE  EVE  with (nolock)
+		   LEFT JOIN BH_RESEARCH.DBO.RDE_Encounter ENC
+		   ON EVE.ENCNTR_ID=ENC.ENCNTR_ID 
+		   LEFT JOIN  BH_RESEARCH.DBO.TempOrder ORD  with (nolock)
+		   ON ENC.ENCNTR_ID=ORD.ENCNTR_ID AND ORD.ORDER_ID=EVE.ORDER_ID
+		   AND ord.LAST_ORDER_STATUS_CD=2543 AND ord.ORDERABLE_TYPE_CD=2513
+
 	        LEFT OUTER JOIN BH_RESEARCH.DBO.TempCE  EVNT2  with (nolock)  
 	            ON EVE.PARENT_EVENT_ID=EVNT2.EVENT_ID
             LEFT OUTER JOIN  [BH_DATAWAREHOUSE].[dbo].PI_LKP_CDE_CODE_VALUE_REF Evres with (nolock)
@@ -1060,6 +1058,7 @@ IF @Pathology=1
 	            ON eve.EVENT_RESULT_STATUS_CD = RESstat.CODE_VALUE_CD 
 			LEFT OUTER JOIN  BH_RESEARCH.DBO.TempBLOB D with (nolock)
 				ON EVE.EVENT_ID=d.EVENT_ID or EVNT2.EVENT_ID=d.EVENT_ID
+			WHERE EVE.CONTRIBUTOR_SYSTEM_CD = '6378204' and EVE.CONTRIBUTOR_SYSTEM_CD is not null 
 --	        ORDER BY [RequestDate] 
 
 
@@ -1318,8 +1317,8 @@ IF @PowerForms=1
 			,DOC.SECTION_EVENT_ID														AS [SectionID]
 	        ,dbo.csvString(Dref.ELEMENT_LABEL_TXT)												AS [Element]
 			,DOC.ELEMENT_EVENT_ID														AS [ElementID]
-	        ,dbo.csvString(Dref.GRID_COLUMN_DESC_TXT)											AS [Component]
-			,DREF.GRID_NAME_TXT															AS [ComponentDesc]
+			,DREF.GRID_NAME_TXT															AS [Component]
+	        ,dbo.csvString(Dref.GRID_COLUMN_DESC_TXT)											AS [ComponentDesc]
 	        ,DOC.GRID_EVENT_ID															AS [ComponentID]
 	        ,dbo.csvString([RESPONSE_VALUE_TXT])												AS [Response]
 			,CASE WHEN ISNUMERIC([RESPONSE_VALUE_TXT]) <> 1 THEN 0 ELSE 1 END					AS [ResponseNumeric]
@@ -1429,14 +1428,13 @@ IF @Radiology=1
 	         ,dbo.csvString(M.[EX_Sub_Modality])									AS SubModality
 	         ,dbo.csvString(M.[ExaminationTypeName])
 			 ,EVE.EVENT_ID                                                          AS EventID
-	
-	   FROM BH_RESEARCH.DBO.TempOrder ORD with (nolock)
-	         INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter ENC
-	              ON-- ORD.PERSON_ID=ENC.PERSON_ID AND 
-				  ORD.ENCNTR_ID=ENC.ENCNTR_ID
-	         INNER JOIN BH_RESEARCH.DBO.TEMPCE EVE with (nolock)
-	              ON ORD.ORDER_ID=EVE.ORDER_ID AND ORD.PERSON_ID=EVE.PERSON_ID AND EVE.CONTRIBUTOR_SYSTEM_CD='6141416' --Radiology data only
-	                --AND EVE.EVENT_CLASS_CD in (234,236)--e.EVENT_CLASS_CD in (224,223,234)  --234	Radiology
+
+
+			FROM BH_RESEARCH.DBO.TempCE  EVE  with (nolock)
+		   LEFT JOIN BH_RESEARCH.DBO.RDE_Encounter ENC
+		   ON EVE.ENCNTR_ID=ENC.ENCNTR_ID 
+		   LEFT JOIN  BH_RESEARCH.DBO.TempOrder ORD  with (nolock)
+		   ON ENC.ENCNTR_ID=ORD.ENCNTR_ID AND ORD.ORDER_ID=EVE.ORDER_ID
 	         LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] R with (nolock)
 	              ON EVE.RECORD_STATUS_CD=R.CODE_VALUE_CD
 	         LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] EC with (nolock)
@@ -1453,6 +1451,7 @@ IF @Radiology=1
 	              ON EVE.EVENT_ID=B.EVENT_ID
              LEFT OUTER JOIN  [BH_RESEARCH].dbo.[Tbl_NHSI_Exam_Mapping] M with  (nolock)--EXAM CODE, MODALITY, SUB-MODALITY LOOK UP TABLE
 	              ON EVE.EVENT_TITLE_TXT=M.[ExaminationTypeName] OR EVE.EVENT_TAG_TXT=M.[ExaminationTypeName]
+		WHERE EVE.CONTRIBUTOR_SYSTEM_CD = '6141416' and EVE.CONTRIBUTOR_SYSTEM_CD is not null 
 		 ORDER BY EVE.EVENT_START_DT_TM
 
 SELECT @Row_Count=@@ROWCOUNT
