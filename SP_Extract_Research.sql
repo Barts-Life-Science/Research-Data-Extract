@@ -1417,9 +1417,9 @@ IF @Radiology=1
 	         ,CONVERT(VARCHAR(16),EVE.EVENT_START_DT_TM,120)						AS ExamStart
 	         ,CONVERT(VARCHAR(16),EVE.EVENT_END_DT_TM,120)							AS ExamEnd
 			 ,dbo.csvString(B.BLOB_CONTENTS)										AS ReportText
-			 ,dbo.csvString(R.CODE_DESC_TXT)										AS RecordStatus
 	         ,dbo.csvString(LO.CODE_DESC_TXT)										AS LastOrderStatus
-	         --,ECLASS.CODE_DESC_TXT													AS EClassDesc
+                 ,dbo.csvString(R.CODE_DESC_TXT)										AS RecordStatus
+                 --,ECLASS.CODE_DESC_TXT													AS EClassDesc
 	         ,dbo.csvString(ER.CODE_DESC_TXT)										AS ResultStatus
 	         --,CONVERT(VARCHAR(16),EVE.EVENT_PERFORMED_DT_TM,120)					AS EVENT_PERFORMED
 	         --,CONVERT(VARCHAR(16),EVE.EVENT_VERIFIED_DT_TM,120)						AS EVENT_VERIFIED
