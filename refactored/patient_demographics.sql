@@ -29,7 +29,7 @@ SELECT
 INTO bh_research.dbo.refactored_rde_patient_demographics
 
 FROM bh_datawarehouse.dbo.pi_cde_person_patient AS pat WITH (NOLOCK)
-INNER JOIN bh_research.dbo.research_patients
+INNER JOIN bh_research.dbo.research_patients AS res
     --ON  REPLACE(Pat.[NHS_NBR_IDENT],'-','')=Res.NHS_Number
     ON pat.person_id = res.personid
 LEFT OUTER JOIN
