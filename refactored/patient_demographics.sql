@@ -1,35 +1,50 @@
- SELECT  
-        REPLACE(Pat.[NHS_NBR_IDENT],'-','')							AS [NHS_Number]   
-        ,CAST(Pat.BIRTH_DT_TM AS DATE)								AS [Date_of_Birth]
-		,Gend.ALIAS_NHS_CD_ALIAS									AS [GENDER_CD]
-        ,GEND.CODE_DISP_TXT											AS [Gender] 
-		,Eth.ALIAS_NHS_CD_ALIAS										AS [ETHNIC_CD]
-        ,Eth.CODE_DESC_TXT											AS [Ethnicity]
-        ,Pat.DECEASED_DT_TM											AS [Date_of_Death]
-        ,Pat.[PERSON_ID]
-        ,Pat.LOCAL_PATIENT_IDENT									AS [MRN]
-		,(SELECT TOP(1) POSTCODE_TXT FROM [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_ADDRESS] A WHERE A.PERSON_ID = Pat.PERSON_ID ORDER BY END_EFFECTIVE_DT_TM  DESC) AS [Postcode]
-		,(SELECT TOP(1) CITY_TXT FROM [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_ADDRESS] A WHERE A.PERSON_ID = Pat.PERSON_ID ORDER BY END_EFFECTIVE_DT_TM  DESC) AS [City]
-		,MARITAL_STATUS_CD											AS [MARITAL_STATUS_CD]
-		,Mart.CODE_DESC_TXT											AS [MARITAL_STATUS]
-		,LANGUAGE_CD												AS [LANGUAGE_CD]
-		,lang.CODE_DESC_TXT											AS [LANGUAGE]
-		,RELIGION_CD												AS [RELIGION_CD]
-		,Reli.CODE_DESC_TXT											AS [RELIGION]
-     INTO  BH_RESEARCH.DBO.refactored_RDE_Patient_Demographics
+SELECT
+    gend.alias_nhs_cd_alias AS gender_cd,
+    gend.code_disp_txt AS gender,
+    eth.alias_nhs_cd_alias AS ethnic_cd,
+    eth.code_desc_txt AS ethnicity,
+    pat.deceased_dt_tm AS date_of_death,
+    pat.person_id,
+    pat.local_patient_ident AS mrn,
+    marital_status_cd AS marital_status_cd,
+    mart.code_desc_txt AS marital_status,
+    language_cd AS language_cd,
+    lang.code_desc_txt AS language,
+    religion_cd AS religion_cd,
+    reli.code_desc_txt AS religion,
+    REPLACE(pat.nhs_nbr_ident, '-', '') AS nhs_number,
+    CAST(pat.birth_dt_tm AS DATE) AS date_of_birth,
+    (
+        SELECT TOP (1) postcode_txt
+        FROM bh_datawarehouse.dbo.pi_cde_person_patient_address AS a
+        WHERE a.person_id = pat.person_id
+        ORDER BY end_effective_dt_tm DESC
+    ) AS postcode,
+    (
+        SELECT TOP (1) city_txt
+        FROM bh_datawarehouse.dbo.pi_cde_person_patient_address AS a
+        WHERE a.person_id = pat.person_id
+        ORDER BY end_effective_dt_tm DESC
+    ) AS city
+INTO bh_research.dbo.refactored_rde_patient_demographics
 
-    FROM  [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT] Pat with (nolock)
-          INNER JOIN [BH_RESEARCH].[dbo].[RESEARCH_PATIENTS] Res
-               --ON  REPLACE(Pat.[NHS_NBR_IDENT],'-','')=Res.NHS_Number
-			   ON PAT.PERSON_ID=RES.PERSONID
-	      LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] Eth with (nolock)
-               ON Pat.ETHNIC_GROUP_CD=Eth.CODE_VALUE_CD
-          LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] Gend with (nolock)
-               ON Pat.GENDER_CD=Gend.CODE_VALUE_CD
-          LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] Mart with (nolock)
-               ON Pat.MARITAL_STATUS_CD=Mart.CODE_VALUE_CD
-		  LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] lang with (nolock)
-               ON Pat.LANGUAGE_CD=lang.CODE_VALUE_CD
-		  LEFT OUTER JOIN [BH_DATAWAREHOUSE].DBO.[PI_LKP_CDE_CODE_VALUE_REF] Reli with (nolock)
-               ON Pat.RELIGION_CD=Reli.CODE_VALUE_CD
-    WHERE RES.EXTRACT_ID=@EXTRACT_ID
+FROM bh_datawarehouse.dbo.pi_cde_person_patient AS pat WITH (NOLOCK)
+INNER JOIN bh_research.dbo.research_patients
+    --ON  REPLACE(Pat.[NHS_NBR_IDENT],'-','')=Res.NHS_Number
+    ON pat.person_id = res.personid
+LEFT OUTER JOIN
+    bh_datawarehouse.dbo.pi_lkp_cde_code_value_ref AS eth WITH (NOLOCK)
+    ON pat.ethnic_group_cd = eth.code_value_cd
+LEFT OUTER JOIN
+    bh_datawarehouse.dbo.pi_lkp_cde_code_value_ref AS gend WITH (NOLOCK)
+    ON pat.gender_cd = gend.code_value_cd
+LEFT OUTER JOIN
+    bh_datawarehouse.dbo.pi_lkp_cde_code_value_ref AS mart WITH (NOLOCK)
+    ON pat.marital_status_cd = mart.code_value_cd
+LEFT OUTER JOIN
+    bh_datawarehouse.dbo.pi_lkp_cde_code_value_ref AS lang WITH (NOLOCK)
+    ON pat.language_cd = lang.code_value_cd
+LEFT OUTER JOIN
+    bh_datawarehouse.dbo.pi_lkp_cde_code_value_ref AS reli WITH (NOLOCK)
+    ON pat.religion_cd = reli.code_value_cd
+WHERE res.extract_id = @EXTRACT_ID
