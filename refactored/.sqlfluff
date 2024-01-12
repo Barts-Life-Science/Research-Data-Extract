@@ -1,0 +1,6 @@
+[sqlfluff]
+dialect = tsql
+
+[sqlfluff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = lower
+unquoted_identifiers_policy = all
