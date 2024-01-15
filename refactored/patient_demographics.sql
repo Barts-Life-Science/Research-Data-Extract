@@ -1,5 +1,13 @@
 USE [BH_RESEARCH]
 GO
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE OR ALTER PROCEDURE sp_patient_demographics(
+    @extract_id INT
+) AS BEGIN
 
 SELECT
     gend.alias_nhs_cd_alias AS gender_cd,
@@ -50,4 +58,6 @@ LEFT OUTER JOIN
 LEFT OUTER JOIN
     bh_datawarehouse.dbo.pi_lkp_cde_code_value_ref AS reli WITH (NOLOCK)
     ON pat.religion_cd = reli.code_value_cd
-WHERE res.extract_id = @EXTRACT_ID
+WHERE res.extract_id = @extract_id
+
+END
