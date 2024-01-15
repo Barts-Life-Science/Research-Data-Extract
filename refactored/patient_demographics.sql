@@ -1,3 +1,6 @@
+USE [BH_RESEARCH]
+GO
+
 SELECT
     gend.alias_nhs_cd_alias AS gender_cd,
     gend.code_disp_txt AS gender,
