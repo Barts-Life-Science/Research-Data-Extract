@@ -1,6 +1,6 @@
 USE [BH_RESEARCH]
 GO
-/****** Object:  StoredProcedure [dbo].[Sp_Extract_Research_Dev]    Script Date: 07/12/2023 14:24:32 ******/
+/****** Object:  StoredProcedure [dbo].[Sp_Extract_Research_Dev]    Script Date: 16/04/2024 09:40:08 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -32,7 +32,7 @@ GO
 --			   BH_Research database. This table will recreated everytime this SP executes
 ------------------------------------------------------------------
 
-ALTER PROCEDURE [dbo].[Sp_Extract_Research] 
+ALTER PROCEDURE [dbo].[Sp_Extract_Research_Dev] 
 (
 @EXTRACT_ID INT, @DATE DATETIME, @Anonymous INT
 )
@@ -1419,6 +1419,7 @@ IF @Radiology=1
 			 ,dbo.csvString(B.BLOB_CONTENTS)										AS ReportText
 			 ,dbo.csvString(LO.CODE_DESC_TXT)										AS LastOrderStatus
 			 ,dbo.csvString(R.CODE_DESC_TXT)										AS RecordStatus
+
 	         --,ECLASS.CODE_DESC_TXT													AS EClassDesc
 	         ,dbo.csvString(ER.CODE_DESC_TXT)										AS ResultStatus
 	         --,CONVERT(VARCHAR(16),EVE.EVENT_PERFORMED_DT_TM,120)					AS EVENT_PERFORMED
@@ -1528,7 +1529,7 @@ IF @FamilyHistory=1
      FROM [BH_DATAWAREHOUSE].[dbo].[PI_DIR_FAMILY_HISTORY_ACTIVITY]  F
           INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter E
                ON F.PERSON_ID=E.PERSON_ID 
-          LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_PERSON_RELTN] REL
+          LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_CDE_PERSON_PATIENT_PERSON_RELTN_DEPRECATED] REL
                ON F.RELATED_PERSON_ID=REL.RELATED_PERSON_ID
           LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_NOMENCLATURE_REF]  R
                ON F.ACTIVITY_NOMEN=R.NOMENCLATURE_ID
@@ -3764,7 +3765,7 @@ IF @CritCare=1
 	Activity_Code AS ActivityCode,
 	CONVERT(VARCHAR(1000), dbo.csvString([ref].[NHS_DATA_DICT_DESCRIPTION_TXT])) AS ActivityDesc
  FROM [BH_DATAWAREHOUSE].[dbo].[CRIT_CARE_activity] a
-left join  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_NHS_DATA_DICT_REF] ref with (nolock) on a.Activity_Code = ref.NHS_DATA_DICT_NHS_CD_ALIAS
+left join  [BH_DATAWAREHOUSE].[dbo].[PI_LKP_NHS_DATA_DICT_REF_DEPRECATED] ref with (nolock) on a.Activity_Code = ref.NHS_DATA_DICT_NHS_CD_ALIAS
 AND ref.[NHS_DATA_DICT_ELEMENT_NAME_KEY_TXT]='CRITICALCAREACTIVITY'
 INNER JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics DEM       
 ON DEM.MRN=a.mrn
@@ -3854,7 +3855,7 @@ IF @CritCare=1
 
 
 FROM [BH_DATAWAREHOUSE].[dbo].[CRIT_CARE_period] a
-left join [BH_DATAWAREHOUSE].[dbo].[PI_LKP_NHS_DATA_DICT_REF] ref with (nolock) on a.CC_Disch_Dest_Cd = ref.NHS_DATA_DICT_NHS_CD_ALIAS
+left join [BH_DATAWAREHOUSE].[dbo].[PI_LKP_NHS_DATA_DICT_REF_DEPRECATED] ref with (nolock) on a.CC_Disch_Dest_Cd = ref.NHS_DATA_DICT_NHS_CD_ALIAS
 AND ref.[NHS_DATA_DICT_ELEMENT_NAME_KEY_TXT]='CRITICALCAREDISCHDESTINATION'
 INNER JOIN  BH_RESEARCH.DBO.RDE_Patient_Demographics DEM       
 ON DEM.MRN=a.mrn
