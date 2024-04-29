@@ -1508,7 +1508,7 @@ IF @FamilyHistory=1
    SELECT @StartDate =GETDATE()
 
     INSERT INTO  BH_RESEARCH.DBO.RDE_FamilyHistory
-          SELECT 
+           SELECT
              CONVERT(VARCHAR(14),F.[PERSON_ID])                              AS PERSON_ID
 			 ,E.MRN
 			 ,CONVERT(VARCHAR(14),E.NHS_Number)                               AS NHS_Number
@@ -1531,16 +1531,16 @@ IF @FamilyHistory=1
           INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter E
                ON F.PERSON_ID=E.PERSON_ID 
           LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[MILL_DIR_PERSON_PERSON_RELTN] REL
-               ON F.RELATED_PERSON_ID=REL.RELATED_PERSON_ID
+			   ON F.RELATED_PERSON_ID = CAST(REL.RELATED_PERSON_ID AS VARCHAR(40))
           LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_NOMENCLATURE_REF]  R
                ON F.ACTIVITY_NOMEN=R.NOMENCLATURE_ID
           LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF]  REF
-               ON REL.PERSON_RELTN_CD=REF.CODE_VALUE_CD
+               ON CAST(REL.PERSON_RELTN_CD AS VARCHAR(40))=REF.CODE_VALUE_CD
           LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF] RELTYPE
-               ON REL.PERSON_RELTN_TYPE_CD=RELTYPE.CODE_VALUE_CD
+               ON CAST(REL.PERSON_RELTN_TYPE_CD AS VARCHAR(40))=RELTYPE.CODE_VALUE_CD
           LEFT OUTER JOIN [BH_DATAWAREHOUSE].[dbo].[PI_LKP_CDE_CODE_VALUE_REF]  VOCAB
                ON R.VOCABULARY_CD=VOCAB.CODE_VALUE_CD
-           --WHERE  F.FHX_VALUE_FLG=1 --This field Indicates wether the condition for a Family member is positive, negative or unknown. 1 is positive 
+          --WHERE  F.FHX_VALUE_FLG=1 --This field Indicates wether the condition for a Family member is positive, negative or unknown. 1 is positive 
 		   WHERE CAST(F.SRC_BEG_EFFECT_DT_TM AS DATE)>=@DATE
 		   ORDER BY BegEffectDate
 
