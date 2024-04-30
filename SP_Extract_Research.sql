@@ -1841,8 +1841,8 @@ IF @PCProblems =1
         SELECT  
              CONVERT(VARCHAR(14), [Problem_Id])								   AS ProbID
 			,CONVERT(VARCHAR(14),PCP.[Person_Id])							   AS Person_ID
-			,CONVERT(VARCHAR(20),E.[MRN])								       AS MRN
-			,CONVERT(VARCHAR(20),E.NHS_Number)								   AS NHS_Number
+			,CONVERT(VARCHAR(20),D.[MRN])								       AS MRN
+			,CONVERT(VARCHAR(20),D.NHS_Number)								   AS NHS_Number
 			,CONVERT(VARCHAR(200),dbo.csvString([Problem]))                                   AS Problem
 			,CONVERT(VARCHAR(200),dbo.csvString([Annotated_Disp]))                            AS Annot_Disp
 			,CONVERT(VARCHAR(100),dbo.csvString([Confirmation]))                              AS Confirmation
@@ -1857,12 +1857,9 @@ IF @PCProblems =1
 			,CONVERT(VARCHAR(MAX),dbo.csvString([Secondary_Descriptions]))                     AS SecDesc
 			,CONVERT(VARCHAR(20),[Problem_Code])							   AS ProbCode
     
-
   FROM [BH_DATAWAREHOUSE].[dbo].[PC_PROBLEMS] pcp WITH (NOLOCK)
-
-        INNER JOIN  BH_RESEARCH.DBO.RDE_Encounter E
-          ON PCP.MRN=E.MRN AND PCP.Person_Id=E.PERSON_ID
-	WHERE CAST(PCP.Onset_Date AS DATE)>=@DATE
+          INNER JOIN   BH_RESEARCH.DBO.RDE_Patient_Demographics D 
+          ON PCP.Person_Id=D.PERSON_ID
 	ORDER BY OnsetDate
 
 Select @Row_Count=@@ROWCOUNT
